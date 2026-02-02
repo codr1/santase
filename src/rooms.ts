@@ -7,8 +7,10 @@ const ROOM_CODE_MAX_ATTEMPTS = 20;
 
 export type Room = {
   code: string;
+  hostToken: string;
   hostConnected: boolean;
   guestConnected: boolean;
+  guestEverJoined: boolean;
   lastActivity: number;
   createdAt: number;
 };
@@ -44,8 +46,10 @@ export function createRoom(): Room {
       const now = Date.now();
       const room: Room = {
         code,
+        hostToken: generateRoomToken(),
         hostConnected: false,
         guestConnected: false,
+        guestEverJoined: false,
         lastActivity: now,
         createdAt: now,
       };
@@ -57,8 +61,16 @@ export function createRoom(): Room {
   throw new Error("Unable to generate unique room code");
 }
 
+function generateRoomToken(): string {
+  return crypto.randomUUID();
+}
+
 export function getRoom(code: string): Room | undefined {
   return rooms.get(code);
+}
+
+export function deleteRoom(code: string): boolean {
+  return rooms.delete(code);
 }
 
 export function touchRoom(code: string): boolean {

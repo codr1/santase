@@ -2,6 +2,7 @@ import { renderHomePage } from "./templates/home";
 import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom } from "./rooms";
+import { handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
 
 const DEFAULT_PORT = 3000;
@@ -61,6 +62,12 @@ if (import.meta.main) {
       }
 
       if (request.method === "GET") {
+        const sseMatch = path.match(/^\/sse\/([^/]+)$/);
+        if (sseMatch) {
+          const normalizedCode = normalizeRoomCode(decodeURIComponent(sseMatch[1]));
+          return handleSse(request, normalizedCode);
+        }
+
         const lobbyMatch = path.match(/^\/rooms\/([^/]+)\/lobby$/);
         if (lobbyMatch) {
           const normalizedCode = normalizeRoomCode(decodeURIComponent(lobbyMatch[1]));
@@ -72,7 +79,9 @@ if (import.meta.main) {
             );
           }
           touchRoom(normalizedCode);
-          return htmlResponse(renderLobbyPage({ code: room.code, isHost: true }));
+          return htmlResponse(
+            renderLobbyPage({ code: room.code, isHost: true, hostToken: room.hostToken }),
+          );
         }
 
         const roomMatch = path.match(/^\/rooms\/([^/]+)$/);

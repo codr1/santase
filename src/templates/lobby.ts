@@ -4,13 +4,17 @@ import { escapeHtml } from "../utils/html";
 type LobbyOptions = {
   code: string;
   isHost?: boolean;
+  hostToken?: string;
 };
 
-export function renderLobbyPage({ code, isHost = false }: LobbyOptions): string {
+export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOptions): string {
   const headline = isHost ? "Share this room code" : "Room";
+  const tokenQuery = isHost && hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
+  const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
   const safeCode = escapeHtml(code);
+  const safeSseUrl = escapeHtml(sseUrl);
   const body = `
-    <main>
+    <main hx-ext="sse" sse-connect="${safeSseUrl}">
       <h1>${headline}</h1>
       <p aria-label="Room code"><strong>${safeCode}</strong></p>
       <p>Waiting for opponent...</p>
