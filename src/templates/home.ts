@@ -10,9 +10,7 @@ export function renderHomePage(): string {
         </form>
       </section>
       <section>
-        <form method="get" action="/rooms">
-          <label for="room-code">Join Room</label>
-          <input id="room-code" name="code" type="text" required />
+        <form method="get" action="/join">
           <button type="submit">Join Room</button>
         </form>
       </section>

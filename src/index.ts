@@ -1,6 +1,8 @@
 import { renderHomePage } from "./templates/home";
-import { renderLayout } from "./templates/layout";
-import { createRoom, getRoom, startRoomCleanup, touchRoom } from "./rooms";
+import { renderJoinPage } from "./templates/join";
+import { renderLobbyPage } from "./templates/lobby";
+import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom } from "./rooms";
+import { escapeHtml } from "./utils/html";
 
 const DEFAULT_PORT = 3000;
 
@@ -18,15 +20,6 @@ function htmlResponse(body: string, status = 200): Response {
   });
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 if (import.meta.main) {
   const port = resolvePort(Bun.env.BUN_PORT);
   startRoomCleanup();
@@ -41,6 +34,10 @@ if (import.meta.main) {
         return htmlResponse(renderHomePage());
       }
 
+      if (request.method === "GET" && path === "/join") {
+        return htmlResponse(renderJoinPage());
+      }
+
       if (request.method === "POST" && path === "/rooms") {
         const room = createRoom();
         return Response.redirect(`/rooms/${room.code}/lobby`, 303);
@@ -48,39 +45,52 @@ if (import.meta.main) {
 
       if (request.method === "GET" && path === "/rooms") {
         const code = url.searchParams.get("code");
-        if (code) {
-          const normalizedCode = code.toUpperCase();
-          return Response.redirect(`/rooms/${encodeURIComponent(normalizedCode)}`, 303);
+        if (!code) {
+          return htmlResponse(renderJoinPage({ error: "Enter a room code." }), 400);
         }
+        const normalizedCode = normalizeRoomCode(code);
+        const room = getRoom(normalizedCode);
+        if (!room) {
+          return htmlResponse(
+            renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+            404,
+          );
+        }
+        touchRoom(normalizedCode);
+        return Response.redirect(`/rooms/${encodeURIComponent(normalizedCode)}`, 303);
       }
 
       if (request.method === "GET") {
         const lobbyMatch = path.match(/^\/rooms\/([^/]+)\/lobby$/);
         if (lobbyMatch) {
-          const code = decodeURIComponent(lobbyMatch[1]).toUpperCase();
-          const room = getRoom(code);
+          const normalizedCode = normalizeRoomCode(decodeURIComponent(lobbyMatch[1]));
+          const room = getRoom(normalizedCode);
           if (!room) {
-            return new Response("Not Found", { status: 404 });
+            return htmlResponse(
+              renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+              404,
+            );
           }
-          touchRoom(code);
-          const safeCode = escapeHtml(room.code);
-          const body = `
-            <main>
-              <h1>Room ${safeCode}</h1>
-              <p>Waiting in the lobby.</p>
-            </main>
-          `;
-          return htmlResponse(renderLayout({ title: "Santase", body }));
+          touchRoom(normalizedCode);
+          return htmlResponse(renderLobbyPage({ code: room.code, isHost: true }));
         }
 
         const roomMatch = path.match(/^\/rooms\/([^/]+)$/);
         if (roomMatch) {
-          const code = decodeURIComponent(roomMatch[1]).toUpperCase();
-          return Response.redirect(`/rooms/${encodeURIComponent(code)}/lobby`, 303);
+          const normalizedCode = normalizeRoomCode(decodeURIComponent(roomMatch[1]));
+          const room = getRoom(normalizedCode);
+          if (!room) {
+            return htmlResponse(
+              renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+              404,
+            );
+          }
+          touchRoom(normalizedCode);
+          return htmlResponse(renderLobbyPage({ code: room.code }));
         }
       }
 
-      return new Response("Not Found", { status: 404 });
+      return new Response(escapeHtml("Not Found"), { status: 404 });
     },
   });
 

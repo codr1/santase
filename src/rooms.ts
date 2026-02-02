@@ -1,6 +1,6 @@
 const ROOM_CODE_MIN_LENGTH = 4;
 const ROOM_CODE_MAX_LENGTH = 6;
-const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ234567890";
 const ROOM_INACTIVITY_MS = 10 * 60 * 1000;
 const ROOM_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const ROOM_CODE_MAX_ATTEMPTS = 20;
@@ -31,6 +31,10 @@ export function generateRoomCode(): string {
   }
 
   return result;
+}
+
+export function normalizeRoomCode(code: string): string {
+  return code.trim().toUpperCase().replaceAll("O", "0");
 }
 
 export function createRoom(): Room {
