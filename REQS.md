@@ -14,11 +14,7 @@ Examples:
 - Add dark mode support
 -->
 
-<!-- BEGIN WIP: STORY-0001 -->
-Build an online version of santase.  I will include the ruleset below.  I am actually going to include several.  Now. I need to be able to join a server.  I will be presented with the option to create a room or join a room.  If I create the room, the server will display a 4 to 6 digit code which I can share with the other player so they can join the room at the same time.  Once both players are in, the game can start.
-
-Our tech stack will be HTMX with as little JS as possible.  The backend will be bun.  No database or persistence at this time.
-<!-- END WIP -->  
+  
 
 RULESET 1:
 
