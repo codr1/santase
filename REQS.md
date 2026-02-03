@@ -35,9 +35,11 @@ You are required to follow suit once the undealt cards are closed.
 
 A player may close the talon if he believes that the cards in his hand are strong enough to win the remaining tricks and reach 66 points. During this time the players must follow suit if possible, otherwise trump.
 
+<!-- BEGIN WIP: STORY-0006 -->
 The player who holds the lowest trump card (the 9) could exchange it for the trump that is turned up during his turn to lead.
 
 The exchange could occur as long as there are more than 2 cards remaining in the talon.
+<!-- END WIP -->
 
 If a player believes that he has 66 points and declares it (only after winning a trick or after matching pairs of K and Q), the play stops immediately.
 
@@ -68,7 +70,9 @@ Now here's where things get a little tricky. If you have the king and queen of t
 Note that you don't leave both cards on the table. Leave the queen (the lower card) and take back the king. But you do need to show it, obviously, to your opponent to confirm the points.
 <!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0006 -->
 Another oddball rule in Santase is that concerns the trump 9. If you have the 9 of the trump suit you can swap it for the overturned trump card in the middle of the table at the start of your turn.
+<!-- END WIP -->
 
 Play continues until the stock pile is exhausted. Now the rules change somewhat. One player will lead. The other player must follow with a card of the same suit. If they do not have one, they must play a trump card (if they have one).
 
@@ -109,7 +113,9 @@ If you have the king and queen of the same suit, you may show it and score 20 po
 <!-- END WIP -->
 
 Exchanging the 9
+<!-- BEGIN WIP: STORY-0006 -->
 If you have the 9 of the trump suit in your hand you may exchange it for the displayed trump card. But only if you are leading the turn, and only at the start of your turn.
+<!-- END WIP -->
 
 The Run-off
 Once no more cards are available in the deck, play proceeds a little differently. The player who won the last hand lays down first. If the other player has a card of the same suit they must play it. If they do not, they must play a card from the trump suit if they have one. As before, play continues until one player scores 66 points or more, or all cards have been taken.
