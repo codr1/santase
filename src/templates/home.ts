@@ -1,8 +1,7 @@
 import { renderLayout } from "./layout";
+import { buttonBaseClasses } from "./styles";
 
 export function renderHomePage(): string {
-  const buttonBaseClasses =
-    "rounded-lg border border-black/20 px-6 py-3 text-white shadow-md shadow-black/20 transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white";
   const body = `
     <main class="flex min-h-screen flex-col items-center justify-center gap-6">
       <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">
