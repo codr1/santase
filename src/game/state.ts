@@ -61,6 +61,10 @@ export function getStockCount(state: GameState): number {
   return state.stock.length;
 }
 
+export function isDeckClosedOrExhausted(state: GameState): boolean {
+  return state.isClosed || state.stock.length === 0;
+}
+
 export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
   let hasKing = false;
   let hasQueen = false;

@@ -9,6 +9,7 @@ import {
   getValidFollowerCards,
   getStockCount,
   hasPotentialMarriage,
+  isDeckClosedOrExhausted,
   playTrick,
   type GameState,
 } from "./state";
@@ -66,6 +67,31 @@ describe("getStockCount", () => {
     const state = dealInitialHands(deck);
 
     expect(getStockCount(state)).toBe(11);
+  });
+});
+
+describe("isDeckClosedOrExhausted", () => {
+  test.each([
+    {
+      label: "returns true when the deck is closed",
+      state: { isClosed: true, stock: [createDeck()[0]] },
+      expected: true,
+    },
+    {
+      label: "returns true when the stock is empty",
+      state: { isClosed: false, stock: [] },
+      expected: true,
+    },
+    {
+      label: "returns false when the deck is open and stock has cards",
+      state: { isClosed: false, stock: [createDeck()[0]] },
+      expected: false,
+    },
+  ])("$label", ({ state, expected }) => {
+    const baseState = dealInitialHands(createDeck());
+    const testState: GameState = { ...baseState, ...state };
+
+    expect(isDeckClosedOrExhausted(testState)).toBe(expected);
   });
 });
 
