@@ -26,11 +26,13 @@ The first player to reach 66 points in a round and to declare it is the winner o
 
 
 
+<!-- BEGIN WIP: STORY-0008 -->
 You are not required to follow suit until all cards of the talon are dealt.
 
 You are required to follow suit once the undealt cards are closed.
 
 A player may close the talon if he believes that the cards in his hand are strong enough to win the remaining tricks and reach 66 points. During this time the players must follow suit if possible, otherwise trump.
+<!-- END WIP -->
 
 <!-- BEGIN WIP: STORY-0006 -->
 The player who holds the lowest trump card (the 9) could exchange it for the trump that is turned up during his turn to lead.
@@ -65,7 +67,9 @@ Decide who leads by gentleman's agreement or any means you like. This player wil
 Another oddball rule in Santase is that concerns the trump 9. If you have the 9 of the trump suit you can swap it for the overturned trump card in the middle of the table at the start of your turn.
 <!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0008 -->
 Play continues until the stock pile is exhausted. Now the rules change somewhat. One player will lead. The other player must follow with a card of the same suit. If they do not have one, they must play a trump card (if they have one).
+<!-- END WIP -->
 
 <!-- BEGIN WIP: STORY-0009 -->
 Remember, the object of the game is to be the first to get to 66 points, or be the player to win the final trick.
@@ -109,7 +113,9 @@ If you have the 9 of the trump suit in your hand you may exchange it for the dis
 <!-- END WIP -->
 
 The Run-off
+<!-- BEGIN WIP: STORY-0008 -->
 Once no more cards are available in the deck, play proceeds a little differently. The player who won the last hand lays down first. If the other player has a card of the same suit they must play it. If they do not, they must play a card from the trump suit if they have one. As before, play continues until one player scores 66 points or more, or all cards have been taken.
+<!-- END WIP -->
 
 Card Scoring
 
