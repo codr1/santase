@@ -204,7 +204,6 @@ export function playTrick(
   };
 }
 
-<<<<<<< HEAD
 export function drawFromStock(state: GameState, winnerIndex: 0 | 1): GameState {
   if (state.stock.length === 0) {
     return state;
