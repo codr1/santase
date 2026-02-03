@@ -11,6 +11,11 @@ import {
 
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
+const VALAT_OPPONENT_SCORE = 0;
+const SCHNEIDER_THRESHOLD = 33;
+const VALAT_GAME_POINTS = 3;
+const SCHNEIDER_GAME_POINTS = 2;
+const STANDARD_GAME_POINTS = 1;
 
 export type GameState = {
   playerHands: [Card[], Card[]];
@@ -79,6 +84,18 @@ export function isDeckClosedOrExhausted(state: GameState): boolean {
   return state.isClosed || state.stock.length === 0;
 export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
   return state.roundScores[playerIndex] >= DECLARE_THRESHOLD;
+}
+
+export function calculateGamePoints(opponentScore: number): 1 | 2 | 3 {
+  if (opponentScore === VALAT_OPPONENT_SCORE) {
+    return VALAT_GAME_POINTS;
+  }
+
+  if (opponentScore < SCHNEIDER_THRESHOLD) {
+    return SCHNEIDER_GAME_POINTS;
+  }
+
+  return STANDARD_GAME_POINTS;
 }
 
 export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {

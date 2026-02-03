@@ -8,6 +8,7 @@ import {
 import {
   canDeclareMarriage,
   canDeclare66,
+  calculateGamePoints,
   declareMarriage,
   dealInitialHands,
   drawFromStock,
@@ -125,6 +126,22 @@ describe("canDeclare66", () => {
     state.roundScores = [10, DECLARE_THRESHOLD];
 
     expect(canDeclare66(state, 1)).toBe(true);
+  });
+});
+
+describe("calculateGamePoints", () => {
+  test("returns 3 when opponent has 0 points", () => {
+    expect(calculateGamePoints(0)).toBe(3);
+  });
+
+  test("returns 2 when opponent has 1-32 points", () => {
+    expect(calculateGamePoints(1)).toBe(2);
+    expect(calculateGamePoints(32)).toBe(2);
+  });
+
+  test("returns 1 when opponent has 33 or more points", () => {
+    expect(calculateGamePoints(33)).toBe(1);
+    expect(calculateGamePoints(66)).toBe(1);
   });
 });
 
