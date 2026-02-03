@@ -65,3 +65,42 @@ HTML rendering with HTMX integration.
 - **Pages**: Home, Join, Lobby
 - **XSS protection**: All dynamic content escaped via `escapeHtml()`
 
+## Game
+
+Card deck and game state management for Santase (66).
+
+### Cards
+
+24-card deck using 4 suits × 6 ranks.
+
+```typescript
+type Suit = "hearts" | "diamonds" | "clubs" | "spades";
+type Rank = "9" | "10" | "J" | "Q" | "K" | "A";
+type Card = { suit: Suit; rank: Rank };
+```
+
+**Point values**: A=11, 10=10, K=4, Q=3, J=2, 9=0
+
+**Rank order** (for trick comparison): 9, J, Q, K, 10, A
+
+**Functions**:
+- `createDeck()`: Returns ordered 24-card deck
+- `shuffleDeck(cards)`: Returns new array with cryptographically random ordering (Fisher-Yates with `crypto.getRandomValues`)
+
+### Game State
+
+```typescript
+type GameState = {
+  playerHands: [Card[], Card[]];
+  stock: Card[];
+  trumpCard: Card;
+  trumpSuit: Suit;
+  wonTricks: [Card[], Card[]];
+  roundScores: [number, number];
+};
+```
+
+**Functions**:
+- `dealInitialHands(deck)`: Deals 6 cards per player (3, then trump, then 3 more), returns initial GameState with 11 cards in stock
+- `getStockCount(state)`: Returns number of cards remaining in stock
+
