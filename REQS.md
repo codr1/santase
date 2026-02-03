@@ -18,7 +18,9 @@ Examples:
 
 RULESET 1:
 
+<!-- BEGIN WIP: STORY-0012 -->
 The main objective of the game is to be the first one to score 11 win points. You win points by winning a round.
+<!-- END WIP -->
 <!-- BEGIN WIP: STORY-0009 -->
 The first player to reach 66 points in a round and to declare it is the winner of the hand.
 <!-- END WIP -->
@@ -74,7 +76,9 @@ Here's one more complicating rule. At any point in the game, while the stock pil
 If you win the game, you get a point. If your opponent has 30 or less points, you score two. No points scores three.
 <!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0012 -->
 Keep playing until someone reaches 10 points or any point level you agreed upon in advance.
+<!-- END WIP -->
 
 
 RULESET 3: 
@@ -92,7 +96,9 @@ The goal is to be the first player to score 66 points. Or, if neither player sco
 
 Dealing
 
+<!-- BEGIN WIP: STORY-0012 -->
 Decide who goes first. After the first deal, the loser of the previous hand deals and the winner lays down the first card.
+<!-- END WIP -->
 
 Playing
 
@@ -121,4 +127,6 @@ Game Scoring
 The player who wins the game scores one point. If the loser has fewer than 31 points (30 or less), the winner scores two points. If the loser has scored no points, the winner scores three.
 <!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0012 -->
 Games are played to any point value the players agree on. Typically, the first person to reach 11 points wins.
+<!-- END WIP -->
