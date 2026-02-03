@@ -24,9 +24,6 @@ The main objective of the game is to be the first one to score 11 win points. Yo
 You acquire points by winning tricks.
 <!-- END WIP -->
 
-<!-- BEGIN WIP: STORY-0005 -->
-Another way to acquire points is by matching pairs of Kings and Queens, which grants you a bonus of 20 or 40 points once declared.
-<!-- END WIP -->
 
 
 You are not required to follow suit until all cards of the talon are dealt.
@@ -64,11 +61,6 @@ High card (or any card of trump suit) takes the cards and accumulates and result
 <!-- END WIP -->
 
 
-<!-- BEGIN WIP: STORY-0005 -->
-Now here's where things get a little tricky. If you have the king and queen of the same suit, you may lay it down and collect 20 points immediately. If they king and queen belong to the trump suit you score a quick 40 points. This is a big chunk of points since you only need 66 points to win the game.
-
-Note that you don't leave both cards on the table. Leave the queen (the lower card) and take back the king. But you do need to show it, obviously, to your opponent to confirm the points.
-<!-- END WIP -->
 
 <!-- BEGIN WIP: STORY-0006 -->
 Another oddball rule in Santase is that concerns the trump 9. If you have the 9 of the trump suit you can swap it for the overturned trump card in the middle of the table at the start of your turn.
@@ -108,9 +100,6 @@ One player plays a card, then the other player plays a card. High card of the sa
 
 
 Kings and Queens
-<!-- BEGIN WIP: STORY-0005 -->
-If you have the king and queen of the same suit, you may show it and score 20 points. King and queen of the trump suit scores 40. You may only do this if you are leading the turn (laying down first). Do it at the start of your turn. Leave the queen down and take back the king.
-<!-- END WIP -->
 
 Exchanging the 9
 <!-- BEGIN WIP: STORY-0006 -->
