@@ -54,6 +54,8 @@ export function shuffleDeck(cards: Card[]): Card[] {
 
 export function getMarriagePoints(suit: Suit, trumpSuit: Suit): number {
   return suit === trumpSuit ? TRUMP_MARRIAGE_POINTS : MARRIAGE_POINTS;
+}
+
 /**
  * Compare two cards by rank only; callers should ensure suits are the same.
  * Returns -1 if card1 wins, 1 if card2 wins, and 0 for equal ranks.
@@ -67,4 +69,34 @@ export function compareCards(card1: Card, card2: Card): number {
   }
 
   return rankIndex1 > rankIndex2 ? -1 : 1;
+}
+
+/**
+ * Compare two cards within a trick based on led and trump suits.
+ * In normal gameplay, ledSuit should equal card1.suit (the first card led).
+ * If ledSuit does not match either card (invalid state), the function falls
+ * back to the logic below and ultimately returns card1 as the winner.
+ * Returns 0 if card1 wins, 1 if card2 wins.
+ */
+export function compareTrick(card1: Card, card2: Card, ledSuit: Suit, trumpSuit: Suit): number {
+  const card1IsTrump = card1.suit === trumpSuit;
+  const card2IsTrump = card2.suit === trumpSuit;
+
+  if (card1IsTrump !== card2IsTrump) {
+    return card1IsTrump ? 0 : 1;
+  }
+
+  if (card1.suit === card2.suit) {
+    const rankResult = compareCards(card1, card2);
+    return rankResult === 1 ? 1 : 0;
+  }
+
+  const card1IsLed = card1.suit === ledSuit;
+  const card2IsLed = card2.suit === ledSuit;
+
+  if (card1IsLed !== card2IsLed) {
+    return card1IsLed ? 0 : 1;
+  }
+
+  return 0;
 }

@@ -4,11 +4,12 @@ export {
   MARRIAGE_POINTS,
   TRUMP_MARRIAGE_POINTS,
   RANK_ORDER,
+  compareCards,
+  compareTrick,
   createDeck,
   shuffleDeck,
   getMarriagePoints,
 } from "./cards";
-export { CARD_POINTS, RANK_ORDER, compareCards, createDeck, shuffleDeck } from "./cards";
 export type { GameState } from "./state";
 export {
   dealInitialHands,
