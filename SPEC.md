@@ -159,12 +159,17 @@ Tracks win points across multiple rounds. First player to reach 11 points wins t
 
 ```typescript
 type MatchState = {
+  game: GameState;
   matchScores: [number, number];
+  dealerIndex: 0 | 1;
+  leaderIndex: 0 | 1;
 };
 ```
 
 **Functions**:
-- `initializeMatch()`: Returns a new MatchState with zeroed scores
+- `startMatch()`: Creates a new match with shuffled deck, random dealer, and initial game state
+- `startNewRound(matchState, roundWinnerIndex)`: Applies round result to match scores, rotates dealer to loser, sets leader to winner, and deals fresh hands; throws if round hasn't ended or winner doesn't match result
+- `initializeMatch()`: Alias for `startMatch()`
 - `applyRoundResult(matchState, winnerIndex, points)`: Returns new MatchState with winner's score incremented
 - `isMatchOver(matchState)`: Returns true when either player has ≥11 points
 - `getMatchWinner(matchState)`: Returns winning player index (0 or 1) or null if match not over; throws if tied at ≥11

@@ -56,9 +56,6 @@ Goal
 
 Dealing
 
-<!-- BEGIN WIP: STORY-0012 -->
-Decide who goes first. After the first deal, the loser of the previous hand deals and the winner lays down the first card.
-<!-- END WIP -->
 
 Playing
 
