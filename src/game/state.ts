@@ -36,13 +36,14 @@ export type GameState = {
   trumpCard: Card | null;
   trumpSuit: Suit;
   isClosed: boolean;
+  leader: 0 | 1;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
   roundResult: RoundResult | null;
 };
 
-export function dealInitialHands(deck: Card[]): GameState {
+export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1): GameState {
   if (deck.length < HAND_SIZE * 2 + 1) {
     throw new Error("Deck does not have enough cards to deal a new round.");
   }
@@ -62,6 +63,8 @@ export function dealInitialHands(deck: Card[]): GameState {
   const playerTwoSecond = deck.slice(cursor, cursor + INITIAL_DEAL_SIZE);
   cursor += INITIAL_DEAL_SIZE;
 
+  const leader: 0 | 1 = dealerIndex === 0 ? 1 : 0;
+
   return {
     playerHands: [
       [...playerOneFirst, ...playerOneSecond],
@@ -70,6 +73,8 @@ export function dealInitialHands(deck: Card[]): GameState {
     stock: deck.slice(cursor),
     trumpCard,
     trumpSuit: trumpCard.suit,
+    isClosed: false,
+    leader,
     isClosed: false,
     wonTricks: [[], []],
     roundScores: [0, 0],
@@ -134,6 +139,24 @@ export function calculateGamePoints(opponentScore: number): 1 | 2 | 3 {
   }
 
   return STANDARD_GAME_POINTS;
+}
+
+export function canExchangeTrump9(state: GameState, playerIndex: 0 | 1): boolean {
+  if (state.leader !== playerIndex) {
+    return false;
+  }
+
+  if (!state.trumpCard) {
+    return false;
+  }
+
+  if (state.stock.length <= 2) {
+    return false;
+  }
+
+  return state.playerHands[playerIndex].some(
+    (card) => card.rank === "9" && card.suit === state.trumpSuit,
+  );
 }
 
 export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
@@ -201,9 +224,39 @@ function removeCardAt(hand: Card[], index: number): Card[] {
   return [...hand.slice(0, index), ...hand.slice(index + 1)];
 }
 
+export function exchangeTrump9(state: GameState, playerIndex: 0 | 1): GameState {
+  if (!canExchangeTrump9(state, playerIndex)) {
+    throw new Error("Player cannot exchange the trump 9.");
+  }
+
+  if (!state.trumpCard) {
+    throw new Error("Trump card is not available for exchange.");
+  }
+
+  const playerHand = state.playerHands[playerIndex];
+  const trump9Index = playerHand.findIndex(
+    (card) => card.rank === "9" && card.suit === state.trumpSuit,
+  );
+
+  if (trump9Index < 0) {
+    throw new Error("Trump 9 not found in hand.");
+  }
+
+  const trump9Card = playerHand[trump9Index];
+  const nextHand = [...removeCardAt(playerHand, trump9Index), state.trumpCard];
+  const nextHands: [Card[], Card[]] =
+    playerIndex === 0 ? [nextHand, state.playerHands[1]] : [state.playerHands[0], nextHand];
+
+  return {
+    ...state,
+    playerHands: nextHands,
+    trumpCard: trump9Card,
+  };
+}
+
 export function playTrick(
   state: GameState,
-  leaderIndex: number,
+  leaderIndex: 0 | 1,
   leaderCard: Card,
   followerCard: Card,
 ): GameState {
@@ -248,8 +301,9 @@ export function playTrick(
     leaderIndex === 0 ? [nextLeaderHand, nextFollowerHand] : [nextFollowerHand, nextLeaderHand];
 
   const winnerOffset = compareTrick(leaderCard, followerCard, leaderCard.suit, state.trumpSuit);
-  const winnerIndex = winnerOffset === 0 ? leaderIndex : followerIndex;
+  const winnerIndex: 0 | 1 = winnerOffset === 0 ? leaderIndex : followerIndex;
   const trickPoints = CARD_POINTS[leaderCard.rank] + CARD_POINTS[followerCard.rank];
+  const nextLeader = winnerIndex;
 
   const nextWonTricks: [Card[], Card[]] = [
     [...state.wonTricks[0]],
@@ -270,6 +324,7 @@ export function playTrick(
   return {
     ...state,
     playerHands: nextHands,
+    leader: nextLeader,
     wonTricks: nextWonTricks,
     roundScores: nextRoundScores,
   };
