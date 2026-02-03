@@ -112,7 +112,7 @@ type Card = { suit: Suit; rank: Rank };
 type GameState = {
   playerHands: [Card[], Card[]];
   stock: Card[];
-  trumpCard: Card;
+  trumpCard: Card | null;
   trumpSuit: Suit;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
@@ -128,3 +128,4 @@ type GameState = {
 - `findDeclareableMarriages(state, playerIndex)`: Returns array of suits player can declare
 - `declareMarriage(state, playerIndex, suit)`: Returns new GameState with marriage declared and points added
 - `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; returns new GameState
+- `drawFromStock(state, winnerIndex)`: After a trick, winner draws top stock card, loser draws next (or trump card on final draw); sets trumpCard to null when exhausted; no-op if stock empty
