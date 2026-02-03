@@ -14,6 +14,7 @@ export type { GameState } from "./state";
 export {
   dealInitialHands,
   getStockCount,
+  canExchangeTrump9,
   hasPotentialMarriage,
   canDeclareMarriage,
   findDeclareableMarriages,
