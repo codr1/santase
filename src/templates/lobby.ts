@@ -14,6 +14,7 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
   const safeCode = escapeHtml(code);
   const safeSseUrl = escapeHtml(sseUrl);
   const gamePathJson = JSON.stringify(`/rooms/${encodeURIComponent(code)}/game`);
+  const waitingStatusMarkup = `<span>Waiting for opponent...</span>`;
   const startGameSection = isHost
     ? `<div id="start-game" sse-swap="start-game"></div>`
     : "";
@@ -21,7 +22,7 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
     <main hx-ext="sse" sse-connect="${safeSseUrl}">
       <h1>${headline}</h1>
       <p aria-label="Room code"><strong>${safeCode}</strong></p>
-      <p id="lobby-status" sse-swap="status" aria-live="polite">Waiting for opponent...</p>
+      <p id="lobby-status" sse-swap="status" aria-live="polite">${waitingStatusMarkup}</p>
       ${startGameSection}
       <p><a href="/">Back to home</a></p>
     </main>

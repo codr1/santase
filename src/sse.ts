@@ -115,8 +115,9 @@ function updateRoomConnections(roomCode: string): { hostConnected: boolean; gues
   return { hostConnected, guestConnected };
 }
 
-function statusMessage(status: { guestConnected: boolean }): string {
-  return status.guestConnected ? "Opponent connected" : "Waiting for opponent...";
+function statusMarkup(status: { guestConnected: boolean }): string {
+  const message = status.guestConnected ? "Opponent connected" : "Waiting for opponent...";
+  return `<span>${message}</span>`;
 }
 
 function startGameMarkup(
@@ -145,10 +146,7 @@ function removeClient(roomCode: string, client: SseClient): void {
   const status = updateRoomConnections(roomCode);
   const room = getRoom(roomCode);
   if (room) {
-    if (client.role === "guest" && !status.guestConnected && status.hostConnected) {
-      broadcast(roomCode, "disconnected", "guest");
-    }
-    broadcast(roomCode, "status", statusMessage(status));
+    broadcast(roomCode, "status", statusMarkup(status));
     broadcastToRole(roomCode, "host", "start-game", startGameMarkup(roomCode, room.hostToken, status));
 
     if (client.role === "host" && !room.guestEverJoined && !status.hostConnected) {
@@ -187,7 +185,7 @@ export function handleSse(request: Request, roomCode: string): Response {
       }
 
       const status = updateRoomConnections(roomCode);
-      broadcast(roomCode, "status", statusMessage(status));
+      broadcast(roomCode, "status", statusMarkup(status));
       broadcastToRole(
         roomCode,
         "host",
