@@ -66,7 +66,9 @@ Remember, the object of the game is to be the first to get to 66 points, or be t
 <!-- END WIP -->
 
 
+<!-- BEGIN WIP: STORY-0010 -->
 Here's one more complicating rule. At any point in the game, while the stock pile still has cards in inventory, a player may close the deck. That means players enter the final phase of the game as if the stock pile was exhausted.
+<!-- END WIP -->
 
 <!-- BEGIN WIP: STORY-0009 -->
 If you win the game, you get a point. If your opponent has 30 or less points, you score two. No points scores three.
@@ -107,7 +109,9 @@ The Run-off
 Card Scoring
 
 Closing the Deck
+<!-- BEGIN WIP: STORY-0010 -->
 At any point in the game, provided there are at least 3 cards remaining in the deck plus the displayed trump card, a player may close the deck. To do this, turn over the displayed trump card. You must do this at the start of your turn and you must be leading (laying down first). Then the game proceeds as in the "run-off".
+<!-- END WIP -->
 <!-- BEGIN WIP: STORY-0009 -->
 There is danger in this play. If the player who closed does not score 66 points, the other player scores 3 points for the win.
 <!-- END WIP -->
