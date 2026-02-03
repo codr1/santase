@@ -1,8 +1,9 @@
 import { renderHomePage } from "./templates/home";
 import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
+import { renderGamePage } from "./templates/game";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom } from "./rooms";
-import { handleSse } from "./sse";
+import { handleSse, startGame } from "./sse";
 import { escapeHtml } from "./utils/html";
 
 const DEFAULT_PORT = 3000;
@@ -21,6 +22,116 @@ function htmlResponse(body: string, status = 200): Response {
   });
 }
 
+export function handleRequest(request: Request): Response {
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  if (request.method === "GET" && path === "/") {
+    return htmlResponse(renderHomePage());
+  }
+
+  if (request.method === "GET" && path === "/join") {
+    return htmlResponse(renderJoinPage());
+  }
+
+  if (request.method === "POST" && path === "/rooms") {
+    const room = createRoom();
+    return Response.redirect(`/rooms/${room.code}/lobby`, 303);
+  }
+
+  if (request.method === "POST") {
+    const startMatch = path.match(/^\/rooms\/([^/]+)\/start$/);
+    if (startMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(startMatch[1]));
+      const room = getRoom(normalizedCode);
+      if (!room) {
+        return htmlResponse(renderJoinPage({ error: "Room not found.", code: normalizedCode }), 404);
+      }
+      const hostToken = url.searchParams.get("hostToken");
+      if (!hostToken || hostToken !== room.hostToken) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      if (!room.guestConnected) {
+        return new Response("Guest not connected", { status: 409 });
+      }
+      touchRoom(normalizedCode);
+      startGame(normalizedCode);
+      return new Response(null, { status: 204 });
+    }
+  }
+
+  if (request.method === "GET" && path === "/rooms") {
+    const code = url.searchParams.get("code");
+    if (!code) {
+      return htmlResponse(renderJoinPage({ error: "Enter a room code." }), 400);
+    }
+    const normalizedCode = normalizeRoomCode(code);
+    const room = getRoom(normalizedCode);
+    if (!room) {
+      return htmlResponse(
+        renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+        404,
+      );
+    }
+    touchRoom(normalizedCode);
+    return Response.redirect(`/rooms/${encodeURIComponent(normalizedCode)}`, 303);
+  }
+
+  if (request.method === "GET") {
+    const sseMatch = path.match(/^\/sse\/([^/]+)$/);
+    if (sseMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(sseMatch[1]));
+      return handleSse(request, normalizedCode);
+    }
+
+    const lobbyMatch = path.match(/^\/rooms\/([^/]+)\/lobby$/);
+    if (lobbyMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(lobbyMatch[1]));
+      const room = getRoom(normalizedCode);
+      if (!room) {
+        return htmlResponse(
+          renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+          404,
+        );
+      }
+      touchRoom(normalizedCode);
+      return htmlResponse(
+        renderLobbyPage({ code: room.code, isHost: true, hostToken: room.hostToken }),
+      );
+    }
+
+    const gameMatch = path.match(/^\/rooms\/([^/]+)\/game$/);
+    if (gameMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(gameMatch[1]));
+      const room = getRoom(normalizedCode);
+      if (!room) {
+        return htmlResponse(
+          renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+          404,
+        );
+      }
+      touchRoom(normalizedCode);
+      return htmlResponse(renderGamePage({ code: room.code }));
+    }
+
+    const roomMatch = path.match(/^\/rooms\/([^/]+)$/);
+    if (roomMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(roomMatch[1]));
+      const room = getRoom(normalizedCode);
+      if (!room) {
+        return htmlResponse(
+          renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+          404,
+        );
+      }
+      touchRoom(normalizedCode);
+      return htmlResponse(renderLobbyPage({ code: room.code }));
+    }
+  }
+
+  return new Response(escapeHtml("Not Found"), { status: 404 });
+}
+
 if (import.meta.main) {
   const port = resolvePort(Bun.env.BUN_PORT);
   startRoomCleanup();
@@ -28,78 +139,7 @@ if (import.meta.main) {
   Bun.serve({
     port,
     fetch(request) {
-      const url = new URL(request.url);
-      const path = url.pathname;
-
-      if (request.method === "GET" && path === "/") {
-        return htmlResponse(renderHomePage());
-      }
-
-      if (request.method === "GET" && path === "/join") {
-        return htmlResponse(renderJoinPage());
-      }
-
-      if (request.method === "POST" && path === "/rooms") {
-        const room = createRoom();
-        return Response.redirect(`/rooms/${room.code}/lobby`, 303);
-      }
-
-      if (request.method === "GET" && path === "/rooms") {
-        const code = url.searchParams.get("code");
-        if (!code) {
-          return htmlResponse(renderJoinPage({ error: "Enter a room code." }), 400);
-        }
-        const normalizedCode = normalizeRoomCode(code);
-        const room = getRoom(normalizedCode);
-        if (!room) {
-          return htmlResponse(
-            renderJoinPage({ error: "Room not found.", code: normalizedCode }),
-            404,
-          );
-        }
-        touchRoom(normalizedCode);
-        return Response.redirect(`/rooms/${encodeURIComponent(normalizedCode)}`, 303);
-      }
-
-      if (request.method === "GET") {
-        const sseMatch = path.match(/^\/sse\/([^/]+)$/);
-        if (sseMatch) {
-          const normalizedCode = normalizeRoomCode(decodeURIComponent(sseMatch[1]));
-          return handleSse(request, normalizedCode);
-        }
-
-        const lobbyMatch = path.match(/^\/rooms\/([^/]+)\/lobby$/);
-        if (lobbyMatch) {
-          const normalizedCode = normalizeRoomCode(decodeURIComponent(lobbyMatch[1]));
-          const room = getRoom(normalizedCode);
-          if (!room) {
-            return htmlResponse(
-              renderJoinPage({ error: "Room not found.", code: normalizedCode }),
-              404,
-            );
-          }
-          touchRoom(normalizedCode);
-          return htmlResponse(
-            renderLobbyPage({ code: room.code, isHost: true, hostToken: room.hostToken }),
-          );
-        }
-
-        const roomMatch = path.match(/^\/rooms\/([^/]+)$/);
-        if (roomMatch) {
-          const normalizedCode = normalizeRoomCode(decodeURIComponent(roomMatch[1]));
-          const room = getRoom(normalizedCode);
-          if (!room) {
-            return htmlResponse(
-              renderJoinPage({ error: "Room not found.", code: normalizedCode }),
-              404,
-            );
-          }
-          touchRoom(normalizedCode);
-          return htmlResponse(renderLobbyPage({ code: room.code }));
-        }
-      }
-
-      return new Response(escapeHtml("Not Found"), { status: 404 });
+      return handleRequest(request);
     },
   });
 
