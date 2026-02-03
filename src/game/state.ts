@@ -1,4 +1,4 @@
-import { SUITS, type Card, type Suit } from "./cards";
+import { SUITS, getMarriagePoints, type Card, type Suit } from "./cards";
 
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
@@ -91,4 +91,23 @@ export function findDeclareableMarriages(
   playerIndex: 0 | 1,
 ): Suit[] {
   return SUITS.filter((suit) => canDeclareMarriage(state, playerIndex, suit));
+}
+
+export function declareMarriage(
+  state: GameState,
+  playerIndex: 0 | 1,
+  suit: Suit,
+): GameState {
+  if (!canDeclareMarriage(state, playerIndex, suit)) {
+    throw new Error("Player cannot declare marriage for this suit.");
+  }
+
+  const updatedScores: [number, number] = [...state.roundScores];
+  updatedScores[playerIndex] += getMarriagePoints(suit, state.trumpSuit);
+
+  return {
+    ...state,
+    declaredMarriages: [...state.declaredMarriages, suit],
+    roundScores: updatedScores,
+  };
 }

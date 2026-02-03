@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { createDeck } from "./cards";
+import { MARRIAGE_POINTS, TRUMP_MARRIAGE_POINTS, createDeck } from "./cards";
 import {
   canDeclareMarriage,
+  declareMarriage,
   dealInitialHands,
   findDeclareableMarriages,
   getStockCount,
@@ -205,5 +206,78 @@ describe("findDeclareableMarriages", () => {
     ]);
 
     expect(findDeclareableMarriages(state, 0)).toEqual(["diamonds", "clubs"]);
+  });
+});
+
+describe("declareMarriage", () => {
+  test("adds points and records the declared suit", () => {
+    const state = makeState([
+      [
+        { suit: "clubs", rank: "K" },
+        { suit: "clubs", rank: "Q" },
+      ],
+      [],
+    ]);
+
+    const nextState = declareMarriage(state, 0, "clubs");
+
+    expect(nextState.declaredMarriages).toEqual(["clubs"]);
+    expect(nextState.roundScores[0]).toBe(MARRIAGE_POINTS);
+    expect(state.declaredMarriages).toEqual([]);
+  });
+
+  test("awards trump marriage points when suit matches trump", () => {
+    const state = makeState([
+      [
+        { suit: "hearts", rank: "K" },
+        { suit: "hearts", rank: "Q" },
+      ],
+      [],
+    ]);
+
+    const nextState = declareMarriage(state, 0, "hearts");
+
+    expect(nextState.roundScores[0]).toBe(TRUMP_MARRIAGE_POINTS);
+  });
+
+  test("awards regular marriage points when suit is not trump", () => {
+    const state = makeState([
+      [
+        { suit: "spades", rank: "K" },
+        { suit: "spades", rank: "Q" },
+      ],
+      [],
+    ]);
+
+    const nextState = declareMarriage(state, 0, "spades");
+
+    expect(nextState.roundScores[0]).toBe(MARRIAGE_POINTS);
+  });
+
+  test("throws when declaring a suit already declared", () => {
+    const state = makeState(
+      [
+        [
+          { suit: "diamonds", rank: "K" },
+          { suit: "diamonds", rank: "Q" },
+        ],
+        [],
+      ],
+      ["diamonds"],
+    );
+
+    expect(() => declareMarriage(state, 0, "diamonds")).toThrow();
+  });
+
+  test("throws when player lacks king and queen", () => {
+    const state = makeState([
+      [
+        { suit: "spades", rank: "K" },
+        { suit: "spades", rank: "A" },
+      ],
+      [],
+    ]);
+
+    expect(() => declareMarriage(state, 0, "spades")).toThrow();
   });
 });

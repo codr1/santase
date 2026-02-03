@@ -15,4 +15,5 @@ export {
   hasPotentialMarriage,
   canDeclareMarriage,
   findDeclareableMarriages,
+  declareMarriage,
 } from "./state";
