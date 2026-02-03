@@ -381,6 +381,9 @@ describe("getMatchWinner", () => {
 });
 
 describe("startMatch", () => {
+  const DEALER_SAMPLE_SIZE = 100;
+  const DEALER_MIN_SHARE = 0.3;
+
   test("returns a match state with an initialized game", () => {
     const match = startMatch();
 
@@ -394,6 +397,20 @@ describe("startMatch", () => {
     const match = startMatch();
 
     expect([0, 1]).toContain(match.dealerIndex);
+  });
+
+  test("randomizes dealer index distribution across matches", () => {
+    const dealerCounts = { 0: 0, 1: 0 };
+
+    for (let i = 0; i < DEALER_SAMPLE_SIZE; i += 1) {
+      const match = startMatch();
+      dealerCounts[match.dealerIndex] += 1;
+    }
+
+    const minimumCount = Math.floor(DEALER_SAMPLE_SIZE * DEALER_MIN_SHARE);
+
+    expect(dealerCounts[0]).toBeGreaterThanOrEqual(minimumCount);
+    expect(dealerCounts[1]).toBeGreaterThanOrEqual(minimumCount);
   });
 
   test("sets leader index opposite the dealer index", () => {
@@ -492,6 +509,30 @@ describe("startNewRound", () => {
     expect(() => startNewRound(matchState, 0)).toThrow(
       "Round winner does not match the round result.",
     );
+  });
+
+  test("handles consecutive round resets with alternating winners", () => {
+    const firstFinishedState = makeFinishedMatchState(0, 2);
+    const afterFirstReset = startNewRound(firstFinishedState, 0);
+
+    const secondFinishedState = {
+      ...afterFirstReset,
+      game: {
+        ...afterFirstReset.game,
+        roundResult: {
+          winner: 1,
+          gamePoints: 1,
+          reason: "exhausted",
+        },
+      },
+    } as const;
+
+    const afterSecondReset = startNewRound(secondFinishedState, 1);
+
+    expect(afterSecondReset.matchScores).toEqual([6, 8]);
+    expect(afterSecondReset.dealerIndex).toBe(0);
+    expect(afterSecondReset.leaderIndex).toBe(1);
+    expectFreshRoundState(afterSecondReset);
   });
 });
 
