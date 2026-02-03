@@ -73,6 +73,10 @@ export function getRoom(code: string): Room | undefined {
   return rooms.get(code);
 }
 
+export function getRoomsCount(): number {
+  return rooms.size;
+}
+
 export function deleteRoom(code: string): boolean {
   return rooms.delete(code);
 }

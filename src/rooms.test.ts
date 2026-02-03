@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createRoom, deleteRoom, getRoom, normalizeRoomCode } from "./rooms";
+import { createRoom, deleteRoom, getRoom, getRoomsCount, normalizeRoomCode } from "./rooms";
 
 describe("rooms storage", () => {
   test("createRoom stores a room retrievable via getRoom", () => {
@@ -11,6 +11,19 @@ describe("rooms storage", () => {
     } finally {
       deleteRoom(room.code);
     }
+  });
+
+  test("getRoomsCount reflects room creation and deletion", () => {
+    const initialCount = getRoomsCount();
+    const room = createRoom();
+
+    try {
+      expect(getRoomsCount()).toBe(initialCount + 1);
+    } finally {
+      deleteRoom(room.code);
+    }
+
+    expect(getRoomsCount()).toBe(initialCount);
   });
 
   test("normalizeRoomCode handles whitespace, casing, and O/0 substitution", () => {
