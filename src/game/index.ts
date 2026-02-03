@@ -19,4 +19,5 @@ export {
   findDeclareableMarriages,
   declareMarriage,
   playTrick,
+  drawFromStock,
 } from "./state";

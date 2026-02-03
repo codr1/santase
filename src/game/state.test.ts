@@ -4,6 +4,7 @@ import {
   canDeclareMarriage,
   declareMarriage,
   dealInitialHands,
+  drawFromStock,
   findDeclareableMarriages,
   getStockCount,
   hasPotentialMarriage,
@@ -31,6 +32,7 @@ describe("dealInitialHands", () => {
     const deck = createDeck();
     const state = dealInitialHands(deck);
 
+    expect(state.trumpCard).not.toBeNull();
     expect(deck).toContainEqual(state.trumpCard);
   });
 
@@ -38,6 +40,7 @@ describe("dealInitialHands", () => {
     const deck = createDeck();
     const state = dealInitialHands(deck);
 
+    expect(state.trumpCard).not.toBeNull();
     expect(state.trumpSuit).toBe(state.trumpCard.suit);
   });
 
@@ -294,6 +297,135 @@ describe("declareMarriage", () => {
     ]);
 
     expect(() => declareMarriage(state, 0, "spades")).toThrow();
+  });
+});
+
+describe("drawFromStock", () => {
+  test("draws top cards for winner and loser in order", () => {
+    const state: GameState = {
+      ...makeState([
+        [{ suit: "hearts", rank: "A" }],
+        [{ suit: "clubs", rank: "Q" }],
+      ]),
+      stock: [
+        { suit: "clubs", rank: "9" },
+        { suit: "spades", rank: "10" },
+        { suit: "diamonds", rank: "K" },
+      ],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+    };
+
+    const nextState = drawFromStock(state, 0);
+
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "A" },
+      { suit: "clubs", rank: "9" },
+    ]);
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "clubs", rank: "Q" },
+      { suit: "spades", rank: "10" },
+    ]);
+    expect(nextState.stock).toEqual([{ suit: "diamonds", rank: "K" }]);
+    expect(state.stock).toEqual([
+      { suit: "clubs", rank: "9" },
+      { suit: "spades", rank: "10" },
+      { suit: "diamonds", rank: "K" },
+    ]);
+  });
+
+  test("uses trump card for the final draw and clears it", () => {
+    const state: GameState = {
+      ...makeState([
+        [{ suit: "hearts", rank: "A" }],
+        [{ suit: "clubs", rank: "Q" }],
+      ]),
+      stock: [{ suit: "clubs", rank: "9" }],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+    };
+
+    const nextState = drawFromStock(state, 0);
+
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "A" },
+      { suit: "clubs", rank: "9" },
+    ]);
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "clubs", rank: "Q" },
+      { suit: "spades", rank: "A" },
+    ]);
+    expect(nextState.stock).toEqual([]);
+    expect(nextState.trumpCard).toBeNull();
+    expect(nextState.trumpSuit).toBe("spades");
+  });
+
+  test("uses trump card for final draw when player one wins", () => {
+    const state: GameState = {
+      ...makeState([
+        [{ suit: "clubs", rank: "K" }],
+        [{ suit: "hearts", rank: "10" }],
+      ]),
+      stock: [{ suit: "diamonds", rank: "Q" }],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+    };
+
+    const nextState = drawFromStock(state, 1);
+
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "hearts", rank: "10" },
+      { suit: "diamonds", rank: "Q" },
+    ]);
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "clubs", rank: "K" },
+      { suit: "spades", rank: "A" },
+    ]);
+    expect(nextState.stock).toEqual([]);
+    expect(nextState.trumpCard).toBeNull();
+    expect(nextState.trumpSuit).toBe("spades");
+  });
+
+  test("winner draws first (top card) even when player one wins", () => {
+    const state: GameState = {
+      ...makeState([
+        [{ suit: "hearts", rank: "J" }],
+        [{ suit: "diamonds", rank: "Q" }],
+      ]),
+      stock: [
+        { suit: "spades", rank: "A" },
+        { suit: "clubs", rank: "K" },
+        { suit: "hearts", rank: "9" },
+      ],
+      trumpCard: { suit: "diamonds", rank: "A" },
+      trumpSuit: "diamonds",
+    };
+
+    const nextState = drawFromStock(state, 1);
+
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "diamonds", rank: "Q" },
+      { suit: "spades", rank: "A" },
+    ]);
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "J" },
+      { suit: "clubs", rank: "K" },
+    ]);
+    expect(nextState.stock).toEqual([{ suit: "hearts", rank: "9" }]);
+  });
+
+  test("returns state unchanged when stock is empty", () => {
+    const state: GameState = {
+      ...makeState([[], []]),
+      stock: [],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+    };
+
+    const nextState = drawFromStock(state, 1);
+
+    expect(nextState).toBe(state);
+    expect(nextState).toEqual(state);
   });
 });
 

@@ -13,7 +13,7 @@ const HAND_SIZE = 6;
 export type GameState = {
   playerHands: [Card[], Card[]];
   stock: Card[];
-  trumpCard: Card;
+  trumpCard: Card | null;
   trumpSuit: Suit;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
@@ -177,5 +177,55 @@ export function playTrick(
     playerHands: nextHands,
     wonTricks: nextWonTricks,
     roundScores: nextRoundScores,
+  };
+}
+
+export function drawFromStock(state: GameState, winnerIndex: 0 | 1): GameState {
+  if (state.stock.length === 0) {
+    return state;
+  }
+
+  const loserIndex = winnerIndex === 0 ? 1 : 0;
+  const nextHands: [Card[], Card[]] = [
+    [...state.playerHands[0]],
+    [...state.playerHands[1]],
+  ];
+
+  if (state.stock.length === 1) {
+    const winnerCard = state.stock[0];
+    if (!winnerCard) {
+      throw new Error("Stock does not have enough cards to draw.");
+    }
+
+    if (!state.trumpCard) {
+      throw new Error("Trump card is not available for final draw.");
+    }
+
+    nextHands[winnerIndex] = [...nextHands[winnerIndex], winnerCard];
+    nextHands[loserIndex] = [...nextHands[loserIndex], state.trumpCard];
+
+    return {
+      ...state,
+      stock: [],
+      trumpCard: null,
+      playerHands: nextHands,
+    };
+  }
+
+  const nextStock = [...state.stock];
+  const winnerCard = nextStock.shift();
+  const loserCard = nextStock.shift();
+
+  if (!winnerCard || !loserCard) {
+    throw new Error("Stock does not have enough cards to draw.");
+  }
+
+  nextHands[winnerIndex] = [...nextHands[winnerIndex], winnerCard];
+  nextHands[loserIndex] = [...nextHands[loserIndex], loserCard];
+
+  return {
+    ...state,
+    stock: nextStock,
+    playerHands: nextHands,
   };
 }
