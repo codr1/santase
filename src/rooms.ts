@@ -1,3 +1,5 @@
+import { initializeMatch, type MatchState } from "./game";
+
 const ROOM_CODE_MIN_LENGTH = 4;
 const ROOM_CODE_MAX_LENGTH = 6;
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ234567890";
@@ -13,6 +15,7 @@ export type Room = {
   guestEverJoined: boolean;
   lastActivity: number;
   createdAt: number;
+  matchState: MatchState;
 };
 
 const rooms = new Map<string, Room>();
@@ -52,6 +55,7 @@ export function createRoom(): Room {
         guestEverJoined: false,
         lastActivity: now,
         createdAt: now,
+        matchState: initializeMatch(),
       };
       rooms.set(code, room);
       return room;
