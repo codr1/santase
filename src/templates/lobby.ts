@@ -22,7 +22,7 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
     <main
       hx-ext="sse"
       sse-connect="${safeSseUrl}"
-      class="flex min-h-screen flex-col items-center justify-center gap-6 text-center"
+      class="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center"
     >
       <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">${headline}</h1>
       <p aria-label="Room code" class="flex items-center justify-center">

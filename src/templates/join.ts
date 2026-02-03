@@ -13,7 +13,7 @@ export function renderJoinPage({ error, code }: JoinOptions = {}): string {
     : "";
   const value = code ? ` value="${escapeHtml(code)}"` : "";
   const body = `
-    <main class="flex min-h-screen flex-col items-center justify-center gap-6 text-center">
+    <main class="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
       <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">Join Room</h1>
       ${message}
       <form method="get" action="/rooms" class="flex w-full max-w-sm flex-col gap-4">

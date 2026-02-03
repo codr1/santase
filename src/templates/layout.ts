@@ -34,7 +34,7 @@ export function renderLayout({ title, body }: LayoutOptions): string {
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
   </head>
-  <body class="bg-white text-gray-900 font-sans">
+  <body class="min-h-screen bg-white text-gray-900 font-sans antialiased">
     ${body}
   </body>
 </html>`;
