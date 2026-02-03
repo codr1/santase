@@ -13,6 +13,7 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
   const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
   const safeCode = escapeHtml(code);
   const safeSseUrl = escapeHtml(sseUrl);
+  const gamePathJson = JSON.stringify(`/rooms/${encodeURIComponent(code)}/game`);
   const startGameSection = isHost
     ? `<div id="start-game" sse-swap="start-game"></div>`
     : "";
@@ -24,6 +25,14 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
       ${startGameSection}
       <p><a href="/">Back to home</a></p>
     </main>
+    <script>
+      document.body.addEventListener("htmx:sseMessage", (event) => {
+        const detail = event.detail || {};
+        if (detail.event !== "game-start") return;
+        const destination = detail.data || ${gamePathJson};
+        window.location.assign(destination);
+      });
+    </script>
   `;
 
   return renderLayout({ title: "Lobby", body });

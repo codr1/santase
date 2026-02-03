@@ -1,8 +1,9 @@
 import { renderHomePage } from "./templates/home";
 import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
+import { renderGamePage } from "./templates/game";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom } from "./rooms";
-import { handleSse } from "./sse";
+import { handleSse, startGame } from "./sse";
 import { escapeHtml } from "./utils/html";
 
 const DEFAULT_PORT = 3000;
@@ -56,7 +57,11 @@ if (import.meta.main) {
           if (!hostToken || hostToken !== room.hostToken) {
             return new Response("Forbidden", { status: 403 });
           }
+          if (!room.guestConnected) {
+            return new Response("Guest not connected", { status: 409 });
+          }
           touchRoom(normalizedCode);
+          startGame(normalizedCode);
           return new Response(null, { status: 204 });
         }
       }
@@ -99,6 +104,20 @@ if (import.meta.main) {
           return htmlResponse(
             renderLobbyPage({ code: room.code, isHost: true, hostToken: room.hostToken }),
           );
+        }
+
+        const gameMatch = path.match(/^\/rooms\/([^/]+)\/game$/);
+        if (gameMatch) {
+          const normalizedCode = normalizeRoomCode(decodeURIComponent(gameMatch[1]));
+          const room = getRoom(normalizedCode);
+          if (!room) {
+            return htmlResponse(
+              renderJoinPage({ error: "Room not found.", code: normalizedCode }),
+              404,
+            );
+          }
+          touchRoom(normalizedCode);
+          return htmlResponse(renderGamePage({ code: room.code }));
         }
 
         const roomMatch = path.match(/^\/rooms\/([^/]+)$/);

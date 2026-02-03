@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createRoom, deleteRoom } from "./rooms";
-import { handleSse } from "./sse";
+import { handleSse, startGame } from "./sse";
 
 type SseEvent = {
   event: string;
@@ -118,6 +118,46 @@ describe("SSE status broadcasting", () => {
     expect(startGameAfterGuestLeft?.data).toBe("");
 
     hostAbort.abort();
+    deleteRoom(room.code);
+  });
+
+  test("broadcasts game-start to host and guest", async () => {
+    const room = createRoom();
+
+    const hostAbort = new AbortController();
+    const hostRequest = new Request(`http://example/rooms/${room.code}?hostToken=${room.hostToken}`, {
+      signal: hostAbort.signal,
+    });
+    const hostResponse = handleSse(hostRequest, room.code);
+    const hostReader = hostResponse.body?.getReader();
+    if (!hostReader) {
+      throw new Error("Expected host SSE stream reader");
+    }
+    await readEvents(hostReader, 2);
+
+    const guestAbort = new AbortController();
+    const guestRequest = new Request(`http://example/rooms/${room.code}`, {
+      signal: guestAbort.signal,
+    });
+    const guestResponse = handleSse(guestRequest, room.code);
+    const guestReader = guestResponse.body?.getReader();
+    if (!guestReader) {
+      throw new Error("Expected guest SSE stream reader");
+    }
+    await readEvents(hostReader, 3);
+    await readEvents(guestReader, 2);
+
+    startGame(room.code);
+
+    const hostGameStart = await readEvents(hostReader, 1);
+    const guestGameStart = await readEvents(guestReader, 1);
+    expect(hostGameStart[0]?.event).toBe("game-start");
+    expect(guestGameStart[0]?.event).toBe("game-start");
+    expect(hostGameStart[0]?.data).toBe(`/rooms/${room.code}/game`);
+    expect(guestGameStart[0]?.data).toBe(`/rooms/${room.code}/game`);
+
+    hostAbort.abort();
+    guestAbort.abort();
     deleteRoom(room.code);
   });
 });

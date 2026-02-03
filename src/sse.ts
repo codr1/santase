@@ -54,6 +54,11 @@ function broadcast(roomCode: string, event: string, data: string): void {
   touchRoom(roomCode);
 }
 
+export function startGame(roomCode: string): void {
+  const destination = `/rooms/${encodeURIComponent(roomCode)}/game`;
+  broadcast(roomCode, "game-start", destination);
+}
+
 function broadcastToRole(roomCode: string, role: ClientRole, event: string, data: string): void {
   const clients = clientsByRoom.get(roomCode);
   if (!clients || clients.size === 0) {
