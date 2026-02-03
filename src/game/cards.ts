@@ -31,3 +31,20 @@ export function createDeck(): Card[] {
 
   return deck;
 }
+
+function randomIntInclusive(min: number, max: number): number {
+  const range = max - min + 1;
+  const values = crypto.getRandomValues(new Uint32Array(1));
+  return min + (values[0] % range);
+}
+
+export function shuffleDeck(cards: Card[]): Card[] {
+  const shuffled = [...cards];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomIntInclusive(0, index);
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}

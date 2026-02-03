@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CARD_POINTS, RANK_ORDER, createDeck } from "./cards";
+import { CARD_POINTS, RANK_ORDER, createDeck, shuffleDeck } from "./cards";
 
 describe("createDeck", () => {
   test("creates a 24-card deck", () => {
@@ -42,5 +42,38 @@ describe("createDeck", () => {
 describe("RANK_ORDER", () => {
   test("matches the trick comparison order", () => {
     expect(RANK_ORDER).toEqual(["9", "J", "Q", "K", "10", "A"]);
+  });
+});
+
+describe("shuffleDeck", () => {
+  const SHUFFLE_ATTEMPTS = 10;
+
+  test("returns a 24-card deck with the same cards", () => {
+    const deck = createDeck();
+    const shuffled = shuffleDeck(deck);
+    const originalSet = new Set(deck.map((card) => `${card.suit}:${card.rank}`));
+    const shuffledSet = new Set(shuffled.map((card) => `${card.suit}:${card.rank}`));
+
+    expect(shuffled).toHaveLength(24);
+    expect(shuffledSet.size).toBe(24);
+
+    for (const card of originalSet) {
+      expect(shuffledSet.has(card)).toBe(true);
+    }
+  });
+
+  test("produces different orderings across multiple calls", () => {
+    const deck = createDeck();
+    const orderings = new Set<string>();
+
+    for (let attempt = 0; attempt < SHUFFLE_ATTEMPTS; attempt += 1) {
+      orderings.add(
+        shuffleDeck(deck)
+          .map((card) => `${card.suit}:${card.rank}`)
+          .join(","),
+      );
+    }
+
+    expect(orderings.size).toBeGreaterThan(1);
   });
 });
