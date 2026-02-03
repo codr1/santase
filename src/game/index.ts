@@ -4,6 +4,8 @@ export {
   MARRIAGE_POINTS,
   TRUMP_MARRIAGE_POINTS,
   RANK_ORDER,
+  compareCards,
+  compareTrick,
   createDeck,
   shuffleDeck,
   getMarriagePoints,
@@ -16,4 +18,5 @@ export {
   canDeclareMarriage,
   findDeclareableMarriages,
   declareMarriage,
+  playTrick,
 } from "./state";

@@ -4,9 +4,12 @@ import {
   MARRIAGE_POINTS,
   RANK_ORDER,
   TRUMP_MARRIAGE_POINTS,
+  compareCards,
+  compareTrick,
   createDeck,
   getMarriagePoints,
   shuffleDeck,
+  type Suit,
 } from "./cards";
 
 describe("createDeck", () => {
@@ -94,5 +97,80 @@ describe("getMarriagePoints", () => {
 
   test.each(cases)("returns $expected for $suit with trump $trumpSuit", ({ suit, trumpSuit, expected }) => {
     expect(getMarriagePoints(suit, trumpSuit)).toBe(expected);
+  });
+});
+
+describe("compareCards", () => {
+  const SUIT: Suit = "spades";
+
+  test("matches the rank order for all comparisons", () => {
+    for (let leftIndex = 0; leftIndex < RANK_ORDER.length; leftIndex += 1) {
+      for (let rightIndex = 0; rightIndex < RANK_ORDER.length; rightIndex += 1) {
+        const left = { suit: SUIT, rank: RANK_ORDER[leftIndex] };
+        const right = { suit: SUIT, rank: RANK_ORDER[rightIndex] };
+        const result = compareCards(left, right);
+
+        if (leftIndex === rightIndex) {
+          expect(result).toBe(0);
+        } else if (leftIndex > rightIndex) {
+          expect(result).toBe(-1);
+        } else {
+          expect(result).toBe(1);
+        }
+      }
+    }
+  });
+
+  test("covers the example rank matchups", () => {
+    expect(compareCards({ suit: SUIT, rank: "A" }, { suit: SUIT, rank: "10" })).toBe(-1);
+    expect(compareCards({ suit: SUIT, rank: "10" }, { suit: SUIT, rank: "K" })).toBe(-1);
+    expect(compareCards({ suit: SUIT, rank: "9" }, { suit: SUIT, rank: "J" })).toBe(1);
+  });
+});
+
+describe("compareTrick", () => {
+  const LED: Suit = "hearts";
+  const TRUMP: Suit = "spades";
+
+  test("uses compareCards for same-suit comparisons", () => {
+    const first = { suit: LED, rank: "A" };
+    const second = { suit: LED, rank: "10" };
+
+    expect(compareTrick(first, second, LED, TRUMP)).toBe(0);
+  });
+
+  test("trump beats non-trump", () => {
+    const first = { suit: LED, rank: "A" };
+    const second = { suit: TRUMP, rank: "9" };
+
+    expect(compareTrick(first, second, LED, TRUMP)).toBe(1);
+  });
+
+  test("trump vs trump defers to rank comparison", () => {
+    const first = { suit: TRUMP, rank: "9" };
+    const second = { suit: TRUMP, rank: "A" };
+
+    expect(compareTrick(first, second, LED, TRUMP)).toBe(1);
+  });
+
+  test("handles trump being the led suit", () => {
+    const first = { suit: TRUMP, rank: "9" };
+    const second = { suit: TRUMP, rank: "A" };
+
+    expect(compareTrick(first, second, TRUMP, TRUMP)).toBe(1);
+  });
+
+  test("off-suit loses to the led suit", () => {
+    const first = { suit: LED, rank: "9" };
+    const second = { suit: "clubs", rank: "A" };
+
+    expect(compareTrick(first, second, LED, TRUMP)).toBe(0);
+  });
+
+  test("defaults to card1 when neither card matches led or trump", () => {
+    const first = { suit: "clubs", rank: "A" };
+    const second = { suit: "hearts", rank: "A" };
+
+    expect(compareTrick(first, second, "diamonds", TRUMP)).toBe(0);
   });
 });

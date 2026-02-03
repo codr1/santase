@@ -1,4 +1,11 @@
-import { SUITS, getMarriagePoints, type Card, type Suit } from "./cards";
+import {
+  CARD_POINTS,
+  SUITS,
+  compareTrick,
+  getMarriagePoints,
+  type Card,
+  type Suit,
+} from "./cards";
 
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
@@ -109,5 +116,66 @@ export function declareMarriage(
     ...state,
     declaredMarriages: [...state.declaredMarriages, suit],
     roundScores: updatedScores,
+  };
+}
+
+function removeCardAt(hand: Card[], index: number): Card[] {
+  return [...hand.slice(0, index), ...hand.slice(index + 1)];
+}
+
+export function playTrick(
+  state: GameState,
+  leaderIndex: number,
+  leaderCard: Card,
+  followerCard: Card,
+): GameState {
+  const followerIndex = leaderIndex === 0 ? 1 : 0;
+  const leaderHand = state.playerHands[leaderIndex];
+  const followerHand = state.playerHands[followerIndex];
+
+  const leaderCardIndex = leaderHand.findIndex(
+    (card) => card.suit === leaderCard.suit && card.rank === leaderCard.rank,
+  );
+  if (leaderCardIndex < 0) {
+    throw new Error("Leader card not found in hand.");
+  }
+
+  const followerCardIndex = followerHand.findIndex(
+    (card) => card.suit === followerCard.suit && card.rank === followerCard.rank,
+  );
+  if (followerCardIndex < 0) {
+    throw new Error("Follower card not found in hand.");
+  }
+
+  const nextLeaderHand = removeCardAt(leaderHand, leaderCardIndex);
+  const nextFollowerHand = removeCardAt(followerHand, followerCardIndex);
+  const nextHands: [Card[], Card[]] =
+    leaderIndex === 0 ? [nextLeaderHand, nextFollowerHand] : [nextFollowerHand, nextLeaderHand];
+
+  const winnerOffset = compareTrick(leaderCard, followerCard, leaderCard.suit, state.trumpSuit);
+  const winnerIndex = winnerOffset === 0 ? leaderIndex : followerIndex;
+  const trickPoints = CARD_POINTS[leaderCard.rank] + CARD_POINTS[followerCard.rank];
+
+  const nextWonTricks: [Card[], Card[]] = [
+    [...state.wonTricks[0]],
+    [...state.wonTricks[1]],
+  ];
+  nextWonTricks[winnerIndex] = [
+    ...nextWonTricks[winnerIndex],
+    leaderCard,
+    followerCard,
+  ];
+
+  const nextRoundScores: [number, number] = [
+    state.roundScores[0],
+    state.roundScores[1],
+  ];
+  nextRoundScores[winnerIndex] += trickPoints;
+
+  return {
+    ...state,
+    playerHands: nextHands,
+    wonTricks: nextWonTricks,
+    roundScores: nextRoundScores,
   };
 }
