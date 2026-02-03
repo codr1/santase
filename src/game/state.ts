@@ -36,6 +36,7 @@ export type GameState = {
   trumpCard: Card | null;
   trumpSuit: Suit;
   isClosed: boolean;
+  leader: 0 | 1;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
@@ -71,6 +72,7 @@ export function dealInitialHands(deck: Card[]): GameState {
     trumpCard,
     trumpSuit: trumpCard.suit,
     isClosed: false,
+    leader: 0,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
@@ -203,7 +205,7 @@ function removeCardAt(hand: Card[], index: number): Card[] {
 
 export function playTrick(
   state: GameState,
-  leaderIndex: number,
+  leaderIndex: 0 | 1,
   leaderCard: Card,
   followerCard: Card,
 ): GameState {
@@ -250,6 +252,7 @@ export function playTrick(
   const winnerOffset = compareTrick(leaderCard, followerCard, leaderCard.suit, state.trumpSuit);
   const winnerIndex = winnerOffset === 0 ? leaderIndex : followerIndex;
   const trickPoints = CARD_POINTS[leaderCard.rank] + CARD_POINTS[followerCard.rank];
+  const nextLeader = winnerIndex as 0 | 1;
 
   const nextWonTricks: [Card[], Card[]] = [
     [...state.wonTricks[0]],
@@ -270,6 +273,7 @@ export function playTrick(
   return {
     ...state,
     playerHands: nextHands,
+    leader: nextLeader,
     wonTricks: nextWonTricks,
     roundScores: nextRoundScores,
   };
