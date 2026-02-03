@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { MARRIAGE_POINTS, TRUMP_MARRIAGE_POINTS, createDeck } from "./cards";
+import {
+  DECLARE_THRESHOLD,
+  MARRIAGE_POINTS,
+  TRUMP_MARRIAGE_POINTS,
+  createDeck,
+} from "./cards";
 import {
   canDeclareMarriage,
+  canDeclare66,
   declareMarriage,
   dealInitialHands,
   drawFromStock,
@@ -92,6 +98,33 @@ describe("isDeckClosedOrExhausted", () => {
     const testState: GameState = { ...baseState, ...state };
 
     expect(isDeckClosedOrExhausted(testState)).toBe(expected);
+describe("canDeclare66", () => {
+  test("returns true when player has exactly 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 10];
+
+    expect(canDeclare66(state, 0)).toBe(true);
+  });
+
+  test("returns true when player is above 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD + 6, 0];
+
+    expect(canDeclare66(state, 0)).toBe(true);
+  });
+
+  test("returns false when player is below 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD - 1, DECLARE_THRESHOLD + 14];
+
+    expect(canDeclare66(state, 0)).toBe(false);
+  });
+
+  test("returns true when player two meets the threshold", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [10, DECLARE_THRESHOLD];
+
+    expect(canDeclare66(state, 1)).toBe(true);
   });
 });
 

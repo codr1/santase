@@ -17,6 +17,7 @@ export const CARD_POINTS: Record<Rank, number> = {
 
 export const MARRIAGE_POINTS = 20;
 export const TRUMP_MARRIAGE_POINTS = 40;
+export const DECLARE_THRESHOLD = 66;
 
 export const RANK_ORDER: Rank[] = ["9", "J", "Q", "K", "10", "A"];
 

@@ -1,5 +1,6 @@
 import {
   CARD_POINTS,
+  DECLARE_THRESHOLD,
   SUITS,
   compareCards,
   compareTrick,
@@ -76,6 +77,8 @@ export function getStockCount(state: GameState): number {
 
 export function isDeckClosedOrExhausted(state: GameState): boolean {
   return state.isClosed || state.stock.length === 0;
+export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
+  return state.roundScores[playerIndex] >= DECLARE_THRESHOLD;
 }
 
 export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
