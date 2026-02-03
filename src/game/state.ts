@@ -15,6 +15,7 @@ export type GameState = {
   stock: Card[];
   trumpCard: Card | null;
   trumpSuit: Suit;
+  isClosed: boolean;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
@@ -48,6 +49,7 @@ export function dealInitialHands(deck: Card[]): GameState {
     stock: deck.slice(cursor),
     trumpCard,
     trumpSuit: trumpCard.suit,
+    isClosed: false,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
