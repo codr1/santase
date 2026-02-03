@@ -18,9 +18,6 @@ Examples:
 
 RULESET 1:
 
-<!-- BEGIN WIP: STORY-0011 -->
-The main objective of the game is to be the first one to score 11 win points. You win points by winning a round.
-<!-- END WIP -->
 
 
 
@@ -45,9 +42,6 @@ Decide who leads by gentleman's agreement or any means you like. This player wil
 
 
 
-<!-- BEGIN WIP: STORY-0011 -->
-Keep playing until someone reaches 10 points or any point level you agreed upon in advance.
-<!-- END WIP -->
 
 
 RULESET 3: 
@@ -81,6 +75,3 @@ Closing the Deck
 
 Game Scoring
 
-<!-- BEGIN WIP: STORY-0011 -->
-Games are played to any point value the players agree on. Typically, the first person to reach 11 points wins.
-<!-- END WIP -->

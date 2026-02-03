@@ -47,6 +47,7 @@ type Room = {
   guestEverJoined: boolean;
   lastActivity: number;
   createdAt: number;
+  matchState: MatchState;
 };
 ```
 
@@ -140,6 +141,7 @@ type RoundResult = {
 - `canDeclare66(state, playerIndex)`: Returns true if player has ≥66 points and round hasn't ended
 - `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 3 game points
 - `calculateGamePoints(opponentScore)`: Returns game points based on opponent score: 3 if 0, 2 if 1-32, 1 if ≥33
+- `calculateWinPoints(state, closerIndex?)`: Returns win points for the round; if closer loses, returns 3 (penalty); otherwise uses calculateGamePoints
 - `canExchangeTrump9(state, playerIndex)`: Returns true when player is leader, stock has 3+ cards, trump card is available, and player holds trump 9
 - `exchangeTrump9(state, playerIndex)`: Swaps trump 9 in hand with trump card; throws when exchange not allowed
 - `hasPotentialMarriage(hand, suit)`: Returns true if hand contains K and Q of suit
@@ -150,3 +152,19 @@ type RoundResult = {
 - `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; enforces follow-suit rules when deck is closed/exhausted; returns new GameState
 - `drawFromStock(state, winnerIndex)`: After a trick, winner draws top stock card, loser draws next (or trump card on final draw); sets trumpCard to null when exhausted; no-op if stock empty
 - `getValidFollowerCards(hand, ledCard, trumpSuit, deckClosedOrExhausted)`: Returns valid cards follower can play; when deck is closed/exhausted, must head in led suit if possible, else play any led suit card, else play trump, else any card
+
+### Match State
+
+Tracks win points across multiple rounds. First player to reach 11 points wins the match.
+
+```typescript
+type MatchState = {
+  matchScores: [number, number];
+};
+```
+
+**Functions**:
+- `initializeMatch()`: Returns a new MatchState with zeroed scores
+- `applyRoundResult(matchState, winnerIndex, points)`: Returns new MatchState with winner's score incremented
+- `isMatchOver(matchState)`: Returns true when either player has ≥11 points
+- `getMatchWinner(matchState)`: Returns winning player index (0 or 1) or null if match not over; throws if tied at ≥11
