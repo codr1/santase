@@ -147,6 +147,31 @@ function makeState(
   };
 }
 
+function makeTrickState({
+  leaderHand,
+  followerHand,
+  trumpSuit = "spades",
+  isClosed = false,
+  stock = [],
+}: {
+  leaderHand: GameState["playerHands"][0];
+  followerHand: GameState["playerHands"][1];
+  trumpSuit?: GameState["trumpSuit"];
+  isClosed?: GameState["isClosed"];
+  stock?: GameState["stock"];
+}): GameState {
+  return {
+    playerHands: [leaderHand, followerHand],
+    stock,
+    trumpCard: { suit: trumpSuit, rank: "9" },
+    trumpSuit,
+    isClosed,
+    wonTricks: [[], []],
+    roundScores: [0, 0],
+    declaredMarriages: [],
+  };
+}
+
 describe("canDeclareMarriage", () => {
   test("returns true when player has king and queen and suit not declared", () => {
     const state = makeState([
@@ -575,6 +600,155 @@ describe("playTrick", () => {
         { suit: "diamonds", rank: "9" },
       ),
     ).toThrow("Follower card not found in hand.");
+  });
+
+  test("must head in suit when possible in closed deck play", () => {
+    const state = makeTrickState({
+      leaderHand: [{ suit: "hearts", rank: "K" }],
+      followerHand: [
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "9" },
+        { suit: "clubs", rank: "9" },
+      ],
+      isClosed: true,
+    });
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "K" },
+        { suit: "hearts", rank: "9" },
+      ),
+    ).toThrow("Follower card must follow suit or trump when the deck is closed or exhausted.");
+  });
+
+  test("allows lower led suit when follower cannot head in suit", () => {
+    const state = makeTrickState({
+      leaderHand: [{ suit: "hearts", rank: "A" }],
+      followerHand: [
+        { suit: "hearts", rank: "9" },
+        { suit: "hearts", rank: "Q" },
+        { suit: "clubs", rank: "9" },
+      ],
+      isClosed: true,
+    });
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "9" },
+      ),
+    ).not.toThrow();
+  });
+
+  test("must play trump when void in led suit in closed deck play", () => {
+    const state = makeTrickState({
+      leaderHand: [{ suit: "hearts", rank: "K" }],
+      followerHand: [
+        { suit: "spades", rank: "9" },
+        { suit: "clubs", rank: "A" },
+      ],
+      trumpSuit: "spades",
+      isClosed: true,
+    });
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "K" },
+        { suit: "clubs", rank: "A" },
+      ),
+    ).toThrow("Follower card must follow suit or trump when the deck is closed or exhausted.");
+  });
+
+  test("must head with trump when led card is trump and follower can beat", () => {
+    const state = makeTrickState({
+      leaderHand: [{ suit: "spades", rank: "J" }],
+      followerHand: [
+        { suit: "spades", rank: "A" },
+        { suit: "spades", rank: "9" },
+      ],
+      trumpSuit: "spades",
+      isClosed: true,
+    });
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "spades", rank: "J" },
+        { suit: "spades", rank: "9" },
+      ),
+    ).toThrow("Follower card must follow suit or trump when the deck is closed or exhausted.");
+  });
+
+  test("allows any trump when follower cannot head a led trump", () => {
+    const state = makeTrickState({
+      leaderHand: [{ suit: "spades", rank: "A" }],
+      followerHand: [
+        { suit: "spades", rank: "9" },
+        { suit: "spades", rank: "K" },
+        { suit: "hearts", rank: "9" },
+      ],
+      trumpSuit: "spades",
+      isClosed: true,
+    });
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "spades", rank: "A" },
+        { suit: "spades", rank: "9" },
+      ),
+    ).not.toThrow();
+  });
+
+  test("allows any card when follower is void in led suit and trumps", () => {
+    const state = makeTrickState({
+      leaderHand: [{ suit: "hearts", rank: "K" }],
+      followerHand: [
+        { suit: "clubs", rank: "9" },
+        { suit: "diamonds", rank: "A" },
+      ],
+      trumpSuit: "spades",
+      isClosed: true,
+    });
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "K" },
+        { suit: "clubs", rank: "9" },
+      ),
+    ).not.toThrow();
+  });
+
+  test("allows free play when the deck is open and stock has cards", () => {
+    const state = makeTrickState({
+      leaderHand: [{ suit: "hearts", rank: "K" }],
+      followerHand: [
+        { suit: "hearts", rank: "A" },
+        { suit: "clubs", rank: "9" },
+      ],
+      trumpSuit: "spades",
+      isClosed: false,
+      stock: [{ suit: "diamonds", rank: "9" }],
+    });
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "K" },
+        { suit: "clubs", rank: "9" },
+      ),
+    ).not.toThrow();
   });
 });
 

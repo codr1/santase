@@ -154,6 +154,23 @@ export function playTrick(
     throw new Error("Follower card not found in hand.");
   }
 
+  if (isDeckClosedOrExhausted(state)) {
+    const validFollowerCards = getValidFollowerCards(
+      followerHand,
+      leaderCard,
+      state.trumpSuit,
+      true,
+    );
+    const isValidFollowerCard = validFollowerCards.some(
+      (card) => card.suit === followerCard.suit && card.rank === followerCard.rank,
+    );
+    if (!isValidFollowerCard) {
+      throw new Error(
+        "Follower card must follow suit or trump when the deck is closed or exhausted.",
+      );
+    }
+  }
+
   const nextLeaderHand = removeCardAt(leaderHand, leaderCardIndex);
   const nextFollowerHand = removeCardAt(followerHand, followerCardIndex);
   const nextHands: [Card[], Card[]] =
