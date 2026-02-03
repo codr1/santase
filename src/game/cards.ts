@@ -54,4 +54,17 @@ export function shuffleDeck(cards: Card[]): Card[] {
 
 export function getMarriagePoints(suit: Suit, trumpSuit: Suit): number {
   return suit === trumpSuit ? TRUMP_MARRIAGE_POINTS : MARRIAGE_POINTS;
+/**
+ * Compare two cards by rank only; callers should ensure suits are the same.
+ * Returns -1 if card1 wins, 1 if card2 wins, and 0 for equal ranks.
+ */
+export function compareCards(card1: Card, card2: Card): number {
+  const rankIndex1 = RANK_ORDER.indexOf(card1.rank);
+  const rankIndex2 = RANK_ORDER.indexOf(card2.rank);
+
+  if (rankIndex1 === rankIndex2) {
+    return 0;
+  }
+
+  return rankIndex1 > rankIndex2 ? -1 : 1;
 }

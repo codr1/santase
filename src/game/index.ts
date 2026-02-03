@@ -8,6 +8,7 @@ export {
   shuffleDeck,
   getMarriagePoints,
 } from "./cards";
+export { CARD_POINTS, RANK_ORDER, compareCards, createDeck, shuffleDeck } from "./cards";
 export type { GameState } from "./state";
 export {
   dealInitialHands,

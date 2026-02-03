@@ -8,6 +8,7 @@ import {
   getMarriagePoints,
   shuffleDeck,
 } from "./cards";
+import { CARD_POINTS, RANK_ORDER, type Suit, compareCards, createDeck, shuffleDeck } from "./cards";
 
 describe("createDeck", () => {
   test("creates a 24-card deck", () => {
@@ -94,5 +95,30 @@ describe("getMarriagePoints", () => {
 
   test.each(cases)("returns $expected for $suit with trump $trumpSuit", ({ suit, trumpSuit, expected }) => {
     expect(getMarriagePoints(suit, trumpSuit)).toBe(expected);
+describe("compareCards", () => {
+  const SUIT: Suit = "spades";
+
+  test("matches the rank order for all comparisons", () => {
+    for (let leftIndex = 0; leftIndex < RANK_ORDER.length; leftIndex += 1) {
+      for (let rightIndex = 0; rightIndex < RANK_ORDER.length; rightIndex += 1) {
+        const left = { suit: SUIT, rank: RANK_ORDER[leftIndex] };
+        const right = { suit: SUIT, rank: RANK_ORDER[rightIndex] };
+        const result = compareCards(left, right);
+
+        if (leftIndex === rightIndex) {
+          expect(result).toBe(0);
+        } else if (leftIndex > rightIndex) {
+          expect(result).toBe(-1);
+        } else {
+          expect(result).toBe(1);
+        }
+      }
+    }
+  });
+
+  test("covers the example rank matchups", () => {
+    expect(compareCards({ suit: SUIT, rank: "A" }, { suit: SUIT, rank: "10" })).toBe(-1);
+    expect(compareCards({ suit: SUIT, rank: "10" }, { suit: SUIT, rank: "K" })).toBe(-1);
+    expect(compareCards({ suit: SUIT, rank: "9" }, { suit: SUIT, rank: "J" })).toBe(1);
   });
 });
