@@ -182,7 +182,7 @@ export function playTrick(
 
 export function drawFromStock(state: GameState, winnerIndex: 0 | 1): GameState {
   if (state.stock.length === 0) {
-    throw new Error("Stock does not have enough cards to draw.");
+    return state;
   }
 
   const loserIndex = winnerIndex === 0 ? 1 : 0;

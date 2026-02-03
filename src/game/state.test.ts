@@ -426,7 +426,7 @@ describe("drawFromStock", () => {
     expect(nextState.stock).toEqual([{ suit: "hearts", rank: "9" }]);
   });
 
-  test("throws when stock is empty", () => {
+  test("returns state unchanged when stock is empty", () => {
     const state: GameState = {
       playerHands: [[], []],
       stock: [],
@@ -437,9 +437,9 @@ describe("drawFromStock", () => {
       declaredMarriages: [],
     };
 
-    expect(() => drawFromStock(state, 1)).toThrow(
-      "Stock does not have enough cards to draw.",
-    );
+    const nextState = drawFromStock(state, 1);
+
+    expect(nextState).toEqual(state);
   });
 });
 
