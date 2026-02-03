@@ -18,4 +18,5 @@ export {
   canDeclareMarriage,
   findDeclareableMarriages,
   declareMarriage,
+  playTrick,
 } from "./state";

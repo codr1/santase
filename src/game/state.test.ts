@@ -7,6 +7,7 @@ import {
   findDeclareableMarriages,
   getStockCount,
   hasPotentialMarriage,
+  playTrick,
   type GameState,
 } from "./state";
 
@@ -293,5 +294,115 @@ describe("declareMarriage", () => {
     ]);
 
     expect(() => declareMarriage(state, 0, "spades")).toThrow();
+  });
+});
+
+describe("playTrick", () => {
+  test("plays a trick, removes cards, and awards the winner", () => {
+    const state: GameState = {
+      playerHands: [
+        [
+          { suit: "hearts", rank: "A" },
+          { suit: "clubs", rank: "9" },
+        ],
+        [{ suit: "hearts", rank: "9" }],
+      ],
+      stock: [],
+      trumpCard: { suit: "spades", rank: "9" },
+      trumpSuit: "spades",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    const nextState = playTrick(
+      state,
+      0,
+      { suit: "hearts", rank: "A" },
+      { suit: "hearts", rank: "9" },
+    );
+
+    expect(nextState.playerHands[0]).toEqual([{ suit: "clubs", rank: "9" }]);
+    expect(nextState.playerHands[1]).toEqual([]);
+    expect(nextState.wonTricks[0]).toEqual([
+      { suit: "hearts", rank: "A" },
+      { suit: "hearts", rank: "9" },
+    ]);
+    expect(nextState.wonTricks[1]).toEqual([]);
+    expect(nextState.roundScores).toEqual([11, 0]);
+  });
+
+  test("accumulates scores and appends to existing won tricks", () => {
+    const state: GameState = {
+      playerHands: [[{ suit: "spades", rank: "9" }], [{ suit: "hearts", rank: "10" }]],
+      stock: [],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+      wonTricks: [
+        [{ suit: "clubs", rank: "K" }],
+        [{ suit: "diamonds", rank: "Q" }],
+      ],
+      roundScores: [10, 5],
+      declaredMarriages: [],
+    };
+
+    const nextState = playTrick(
+      state,
+      1,
+      { suit: "hearts", rank: "10" },
+      { suit: "spades", rank: "9" },
+    );
+
+    expect(nextState.playerHands[0]).toEqual([]);
+    expect(nextState.playerHands[1]).toEqual([]);
+    expect(nextState.wonTricks[0]).toEqual([
+      { suit: "clubs", rank: "K" },
+      { suit: "hearts", rank: "10" },
+      { suit: "spades", rank: "9" },
+    ]);
+    expect(nextState.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
+    expect(nextState.roundScores).toEqual([20, 5]);
+  });
+
+  test("throws when the leader card is not in hand", () => {
+    const state: GameState = {
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "clubs", rank: "9" }]],
+      stock: [],
+      trumpCard: { suit: "spades", rank: "9" },
+      trumpSuit: "spades",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "diamonds", rank: "A" },
+        { suit: "clubs", rank: "9" },
+      ),
+    ).toThrow("Leader card not found in hand.");
+  });
+
+  test("throws when the follower card is not in hand", () => {
+    const state: GameState = {
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "clubs", rank: "9" }]],
+      stock: [],
+      trumpCard: { suit: "spades", rank: "9" },
+      trumpSuit: "spades",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    expect(() =>
+      playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "diamonds", rank: "9" },
+      ),
+    ).toThrow("Follower card not found in hand.");
   });
 });
