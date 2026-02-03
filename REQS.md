@@ -20,7 +20,9 @@ RULESET 1:
 
 The main objective of the game is to be the first one to score 11 win points. You win points by winning a round. The first player to reach 66 points in a round and to declare it is the winner of the hand.
 
+<!-- BEGIN WIP: STORY-0004 -->
 You acquire points by winning tricks.
+<!-- END WIP -->
 
 Another way to acquire points is by matching pairs of Kings and Queens, which grants you a bonus of 20 or 40 points once declared.
 
@@ -53,7 +55,9 @@ Santase Rules
 Santase is not a commonly played card game but it is a lot of fun. This two-player game, popular in Eastern Europe, is challenging and competitive. Give it a try.
 
 
-Decide who leads by gentleman's agreement or any means you like. This player will lay down a card. The opponent will do then do the same. High card (or any card of trump suit) takes the cards and accumulates and resulting points.
+Decide who leads by gentleman's agreement or any means you like. This player will lay down a card. The opponent will do then do the same. <!-- BEGIN WIP: STORY-0004 -->
+High card (or any card of trump suit) takes the cards and accumulates and resulting points.
+<!-- END WIP -->
 
 
 Now here's where things get a little tricky. If you have the king and queen of the same suit, you may lay it down and collect 20 points immediately. If they king and queen belong to the trump suit you score a quick 40 points. This is a big chunk of points since you only need 66 points to win the game.
@@ -90,7 +94,9 @@ Dealing
 Decide who goes first. After the first deal, the loser of the previous hand deals and the winner lays down the first card.
 
 Playing
+<!-- BEGIN WIP: STORY-0004 -->
 One player plays a card, then the other player plays a card. High card of the same suit takes the cards. Aces are high. Alternatively, any card of the trump suit takes any card of another suit.
+<!-- END WIP -->
 
 
 Kings and Queens
