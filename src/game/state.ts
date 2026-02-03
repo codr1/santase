@@ -1,6 +1,7 @@
 import {
   CARD_POINTS,
   SUITS,
+  compareCards,
   compareTrick,
   getMarriagePoints,
   type Card,
@@ -15,6 +16,7 @@ export type GameState = {
   stock: Card[];
   trumpCard: Card | null;
   trumpSuit: Suit;
+  isClosed: boolean;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
@@ -48,6 +50,7 @@ export function dealInitialHands(deck: Card[]): GameState {
     stock: deck.slice(cursor),
     trumpCard,
     trumpSuit: trumpCard.suit,
+    isClosed: false,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
@@ -56,6 +59,10 @@ export function dealInitialHands(deck: Card[]): GameState {
 
 export function getStockCount(state: GameState): number {
   return state.stock.length;
+}
+
+export function isDeckClosedOrExhausted(state: GameState): boolean {
+  return state.isClosed || state.stock.length === 0;
 }
 
 export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
@@ -147,6 +154,23 @@ export function playTrick(
     throw new Error("Follower card not found in hand.");
   }
 
+  if (isDeckClosedOrExhausted(state)) {
+    const validFollowerCards = getValidFollowerCards(
+      followerHand,
+      leaderCard,
+      state.trumpSuit,
+      true,
+    );
+    const isValidFollowerCard = validFollowerCards.some(
+      (card) => card.suit === followerCard.suit && card.rank === followerCard.rank,
+    );
+    if (!isValidFollowerCard) {
+      throw new Error(
+        "Follower card must follow suit or trump when the deck is closed or exhausted.",
+      );
+    }
+  }
+
   const nextLeaderHand = removeCardAt(leaderHand, leaderCardIndex);
   const nextFollowerHand = removeCardAt(followerHand, followerCardIndex);
   const nextHands: [Card[], Card[]] =
@@ -228,4 +252,34 @@ export function drawFromStock(state: GameState, winnerIndex: 0 | 1): GameState {
     stock: nextStock,
     playerHands: nextHands,
   };
+}
+
+/**
+ * Returns playable follower cards under Santase "must-head" rules
+ * when the deck is closed or exhausted.
+ */
+export function getValidFollowerCards(
+  hand: Card[],
+  ledCard: Card,
+  trumpSuit: Suit,
+  deckClosedOrExhausted: boolean,
+): Card[] {
+  if (!deckClosedOrExhausted) {
+    return hand;
+  }
+
+  const ledSuitCards = hand.filter((card) => card.suit === ledCard.suit);
+  if (ledSuitCards.length > 0) {
+    const winningLedSuitCards = ledSuitCards.filter(
+      (card) => compareCards(card, ledCard) === -1,
+    );
+    return winningLedSuitCards.length > 0 ? winningLedSuitCards : ledSuitCards;
+  }
+
+  const trumpCards = hand.filter((card) => card.suit === trumpSuit);
+  if (trumpCards.length > 0) {
+    return trumpCards;
+  }
+
+  return hand;
 }
