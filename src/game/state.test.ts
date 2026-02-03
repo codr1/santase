@@ -63,6 +63,13 @@ describe("dealInitialHands", () => {
     expect(state.isClosed).toBe(false);
   });
 
+  test("defaults closedBy to null", () => {
+    const deck = createDeck();
+    const state = dealInitialHands(deck);
+
+    expect(state.closedBy).toBeNull();
+  });
+
   test("initializes declared marriages as empty", () => {
     const deck = createDeck();
     const state = dealInitialHands(deck, 1);
@@ -479,6 +486,7 @@ function makeState(
     trumpSuit,
     leader: overrides.leader ?? 0,
     isClosed: false,
+    closedBy: null,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages,
@@ -505,9 +513,11 @@ function makeTrickState({
     trumpCard: { suit: trumpSuit, rank: "9" },
     trumpSuit,
     isClosed,
+    closedBy: null,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
+    roundResult: null,
   };
 }
 
@@ -843,6 +853,7 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      closedBy: null,
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
@@ -874,6 +885,7 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      closedBy: null,
       wonTricks: [
         [{ suit: "clubs", rank: "K" }],
         [{ suit: "diamonds", rank: "Q" }],
@@ -909,6 +921,7 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      closedBy: null,
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
@@ -933,6 +946,7 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      closedBy: null,
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
