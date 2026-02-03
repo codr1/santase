@@ -15,6 +15,9 @@ export const CARD_POINTS: Record<Rank, number> = {
   "9": 0,
 };
 
+export const MARRIAGE_POINTS = 20;
+export const TRUMP_MARRIAGE_POINTS = 40;
+
 export const RANK_ORDER: Rank[] = ["9", "J", "Q", "K", "10", "A"];
 
 export const SUITS: Suit[] = ["hearts", "diamonds", "clubs", "spades"];
@@ -47,4 +50,8 @@ export function shuffleDeck(cards: Card[]): Card[] {
   }
 
   return shuffled;
+}
+
+export function getMarriagePoints(suit: Suit, trumpSuit: Suit): number {
+  return suit === trumpSuit ? TRUMP_MARRIAGE_POINTS : MARRIAGE_POINTS;
 }

@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { CARD_POINTS, RANK_ORDER, createDeck, shuffleDeck } from "./cards";
+import {
+  CARD_POINTS,
+  MARRIAGE_POINTS,
+  RANK_ORDER,
+  TRUMP_MARRIAGE_POINTS,
+  createDeck,
+  getMarriagePoints,
+  shuffleDeck,
+} from "./cards";
 
 describe("createDeck", () => {
   test("creates a 24-card deck", () => {
@@ -75,5 +83,16 @@ describe("shuffleDeck", () => {
     }
 
     expect(orderings.size).toBeGreaterThan(1);
+  });
+});
+
+describe("getMarriagePoints", () => {
+  const cases = [
+    { suit: "hearts", trumpSuit: "hearts", expected: TRUMP_MARRIAGE_POINTS },
+    { suit: "clubs", trumpSuit: "spades", expected: MARRIAGE_POINTS },
+  ] as const;
+
+  test.each(cases)("returns $expected for $suit with trump $trumpSuit", ({ suit, trumpSuit, expected }) => {
+    expect(getMarriagePoints(suit, trumpSuit)).toBe(expected);
   });
 });
