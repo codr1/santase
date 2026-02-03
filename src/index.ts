@@ -44,6 +44,23 @@ if (import.meta.main) {
         return Response.redirect(`/rooms/${room.code}/lobby`, 303);
       }
 
+      if (request.method === "POST") {
+        const startMatch = path.match(/^\/rooms\/([^/]+)\/start$/);
+        if (startMatch) {
+          const normalizedCode = normalizeRoomCode(decodeURIComponent(startMatch[1]));
+          const room = getRoom(normalizedCode);
+          if (!room) {
+            return htmlResponse(renderJoinPage({ error: "Room not found.", code: normalizedCode }), 404);
+          }
+          const hostToken = url.searchParams.get("hostToken");
+          if (!hostToken || hostToken !== room.hostToken) {
+            return new Response("Forbidden", { status: 403 });
+          }
+          touchRoom(normalizedCode);
+          return new Response(null, { status: 204 });
+        }
+      }
+
       if (request.method === "GET" && path === "/rooms") {
         const code = url.searchParams.get("code");
         if (!code) {

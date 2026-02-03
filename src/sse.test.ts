@@ -85,9 +85,11 @@ describe("SSE status broadcasting", () => {
       throw new Error("Expected host SSE stream reader");
     }
 
-    const [initialStatus] = await readEvents(hostReader, 1);
-    expect(initialStatus.event).toBe("status");
-    expect(JSON.parse(initialStatus.data)).toEqual({ hostConnected: true, guestConnected: false });
+    const initialEvents = await readEvents(hostReader, 2);
+    const initialStatus = initialEvents.find((event) => event.event === "status");
+    const initialStartGame = initialEvents.find((event) => event.event === "start-game");
+    expect(initialStatus?.data).toBe("Waiting for opponent...");
+    expect(initialStartGame?.data).toBe("");
 
     const guestAbort = new AbortController();
     const guestRequest = new Request(`http://example/rooms/${room.code}`, {
@@ -96,24 +98,24 @@ describe("SSE status broadcasting", () => {
     const guestResponse = handleSse(guestRequest, room.code);
     void guestResponse;
 
-    const guestConnectEvents = await readEvents(hostReader, 2);
+    const guestConnectEvents = await readEvents(hostReader, 3);
     const connectedEvent = guestConnectEvents.find((event) => event.event === "connected");
     const statusAfterGuest = guestConnectEvents.find((event) => event.event === "status");
+    const startGameAfterGuest = guestConnectEvents.find((event) => event.event === "start-game");
     expect(connectedEvent?.data).toBe("guest");
-    expect(JSON.parse(statusAfterGuest?.data ?? "{}")).toEqual({
-      hostConnected: true,
-      guestConnected: true,
-    });
+    expect(statusAfterGuest?.data).toBe("Opponent connected");
+    expect(startGameAfterGuest?.data).toBe(
+      `<button type="button" hx-post="/rooms/${room.code}/start?hostToken=${room.hostToken}" hx-swap="none" aria-label="Start game">Start Game</button>`,
+    );
 
     guestAbort.abort();
-    const guestDisconnectEvents = await readEvents(hostReader, 2);
+    const guestDisconnectEvents = await readEvents(hostReader, 3);
     const disconnectedEvent = guestDisconnectEvents.find((event) => event.event === "disconnected");
     const statusAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "status");
+    const startGameAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "start-game");
     expect(disconnectedEvent?.data).toBe("guest");
-    expect(JSON.parse(statusAfterGuestLeft?.data ?? "{}")).toEqual({
-      hostConnected: true,
-      guestConnected: false,
-    });
+    expect(statusAfterGuestLeft?.data).toBe("Waiting for opponent...");
+    expect(startGameAfterGuestLeft?.data).toBe("");
 
     hostAbort.abort();
     deleteRoom(room.code);
