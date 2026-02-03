@@ -99,6 +99,8 @@ type Card = { suit: Suit; rank: Rank };
 
 **Marriage points**: Regular=20, Trump=40
 
+**Declaration threshold**: 66 points
+
 **Functions**:
 - `createDeck()`: Returns ordered 24-card deck
 - `shuffleDeck(cards)`: Returns new array with cryptographically random ordering (Fisher-Yates with `crypto.getRandomValues`)
@@ -118,12 +120,22 @@ type GameState = {
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
+  roundResult: RoundResult | null;
+};
+
+type RoundResult = {
+  winner: 0 | 1;
+  gamePoints: 1 | 2 | 3;
+  reason: "declared_66" | "false_declaration" | "exhausted" | "closed_failed";
 };
 ```
 
 **Functions**:
 - `dealInitialHands(deck)`: Deals 6 cards per player (3, then trump, then 3 more), returns initial GameState with 11 cards in stock
 - `getStockCount(state)`: Returns number of cards remaining in stock
+- `canDeclare66(state, playerIndex)`: Returns true if player has ≥66 points and round hasn't ended
+- `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 3 game points
+- `calculateGamePoints(opponentScore)`: Returns game points based on opponent score: 3 if 0, 2 if 1-32, 1 if ≥33
 - `hasPotentialMarriage(hand, suit)`: Returns true if hand contains K and Q of suit
 - `canDeclareMarriage(state, playerIndex, suit)`: Returns true if player can declare marriage (has K+Q and suit not already declared)
 - `findDeclareableMarriages(state, playerIndex)`: Returns array of suits player can declare

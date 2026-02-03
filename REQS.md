@@ -18,11 +18,8 @@ Examples:
 
 RULESET 1:
 
-<!-- BEGIN WIP: STORY-0012 -->
+<!-- BEGIN WIP: STORY-0011 -->
 The main objective of the game is to be the first one to score 11 win points. You win points by winning a round.
-<!-- END WIP -->
-<!-- BEGIN WIP: STORY-0009 -->
-The first player to reach 66 points in a round and to declare it is the winner of the hand.
 <!-- END WIP -->
 
 
@@ -35,17 +32,6 @@ The player who holds the lowest trump card (the 9) could exchange it for the tru
 The exchange could occur as long as there are more than 2 cards remaining in the talon.
 <!-- END WIP -->
 
-<!-- BEGIN WIP: STORY-0009 -->
-If a player believes that he has 66 points and declares it (only after winning a trick or after matching pairs of K and Q), the play stops immediately.
-
-If the player is right and has more than 66 points, he wins the hand. Otherwise, points are distributed to the opponent instead.
-
-Winning a round gives you:
-
-3 points if the opponent has 0 tricks won
-2 points if the opponent's score is below 33
-1 point if the opponent's score is 33 or more
-<!-- END WIP -->
 
 --- 
 
@@ -63,20 +49,14 @@ Another oddball rule in Santase is that concerns the trump 9. If you have the 9 
 <!-- END WIP -->
 
 
-<!-- BEGIN WIP: STORY-0009 -->
-Remember, the object of the game is to be the first to get to 66 points, or be the player to win the final trick.
-<!-- END WIP -->
 
 
 <!-- BEGIN WIP: STORY-0010 -->
 Here's one more complicating rule. At any point in the game, while the stock pile still has cards in inventory, a player may close the deck. That means players enter the final phase of the game as if the stock pile was exhausted.
 <!-- END WIP -->
 
-<!-- BEGIN WIP: STORY-0009 -->
-If you win the game, you get a point. If your opponent has 30 or less points, you score two. No points scores three.
-<!-- END WIP -->
 
-<!-- BEGIN WIP: STORY-0012 -->
+<!-- BEGIN WIP: STORY-0011 -->
 Keep playing until someone reaches 10 points or any point level you agreed upon in advance.
 <!-- END WIP -->
 
@@ -90,9 +70,6 @@ Number of Players
 Santase is a card game for 2 people.
 
 Goal
-<!-- BEGIN WIP: STORY-0009 -->
-The goal is to be the first player to score 66 points. Or, if neither player scores 66 points, the player to take the final card wins.
-<!-- END WIP -->
 
 Dealing
 
@@ -118,15 +95,9 @@ Closing the Deck
 <!-- BEGIN WIP: STORY-0010 -->
 At any point in the game, provided there are at least 3 cards remaining in the deck plus the displayed trump card, a player may close the deck. To do this, turn over the displayed trump card. You must do this at the start of your turn and you must be leading (laying down first). Then the game proceeds as in the "run-off".
 <!-- END WIP -->
-<!-- BEGIN WIP: STORY-0009 -->
-There is danger in this play. If the player who closed does not score 66 points, the other player scores 3 points for the win.
-<!-- END WIP -->
 
 Game Scoring
-<!-- BEGIN WIP: STORY-0009 -->
-The player who wins the game scores one point. If the loser has fewer than 31 points (30 or less), the winner scores two points. If the loser has scored no points, the winner scores three.
-<!-- END WIP -->
 
-<!-- BEGIN WIP: STORY-0012 -->
+<!-- BEGIN WIP: STORY-0011 -->
 Games are played to any point value the players agree on. Typically, the first person to reach 11 points wins.
 <!-- END WIP -->
