@@ -26,6 +26,17 @@ describe("rooms storage", () => {
     expect(getRoomsCount()).toBe(initialCount);
   });
 
+  test("getRoom metadata distinguishes missing from expired rooms", () => {
+    const missingLookup = getRoom("never-existed", { includeMetadata: true });
+    expect(missingLookup.status).toBe("missing");
+
+    const room = createRoom();
+    deleteRoom(room.code);
+
+    const expiredLookup = getRoom(room.code, { includeMetadata: true });
+    expect(expiredLookup.status).toBe("expired");
+  });
+
   test("normalizeRoomCode handles whitespace, casing, and O/0 substitution", () => {
     const cases = [
       { input: " abcd ", expected: "ABCD" },
