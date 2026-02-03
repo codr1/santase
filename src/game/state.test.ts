@@ -29,6 +29,7 @@ import {
   isDeckClosedOrExhausted,
   playTrick,
   startMatch,
+  startNewRound,
   type GameState,
 } from "./state";
 
@@ -405,6 +406,92 @@ describe("startMatch", () => {
     const match = startMatch();
 
     expect(match.matchScores).toEqual([0, 0]);
+  });
+});
+
+describe("startNewRound", () => {
+  const makeFinishedMatchState = (winner: 0 | 1, gamePoints: 1 | 2 | 3) =>
+    ({
+      game: {
+        ...makeState([[], []], ["hearts"]),
+        playerHands: [
+          [{ suit: "hearts", rank: "A" }],
+          [{ suit: "clubs", rank: "K" }],
+        ],
+        stock: [{ suit: "spades", rank: "9" }],
+        trumpCard: { suit: "diamonds", rank: "Q" },
+        trumpSuit: "diamonds",
+        isClosed: true,
+        wonTricks: [
+          [{ suit: "hearts", rank: "9" }],
+          [{ suit: "clubs", rank: "9" }],
+        ],
+        roundScores: [66, 20],
+        declaredMarriages: ["hearts"],
+        roundResult: {
+          winner,
+          gamePoints,
+          reason: "declared_66",
+        },
+      },
+      matchScores: [4, 7],
+      dealerIndex: 1,
+      leaderIndex: 0,
+    }) as const;
+
+  const expectFreshRoundState = (nextState: ReturnType<typeof startNewRound>) => {
+    expect(nextState.game.playerHands[0]).toHaveLength(6);
+    expect(nextState.game.playerHands[1]).toHaveLength(6);
+    expect(nextState.game.stock).toHaveLength(11);
+    expect(nextState.game.trumpCard).not.toBeNull();
+    expect(nextState.game.declaredMarriages).toEqual([]);
+    expect(nextState.game.wonTricks).toEqual([[], []]);
+    expect(nextState.game.roundScores).toEqual([0, 0]);
+    expect(nextState.game.isClosed).toBe(false);
+    expect(nextState.game.roundResult).toBeNull();
+  };
+
+  test("updates match state when player 1 wins", () => {
+    const matchState = makeFinishedMatchState(1, 2);
+
+    const nextState = startNewRound(matchState, 1);
+
+    expect(nextState.dealerIndex).toBe(0);
+    expect(nextState.leaderIndex).toBe(1);
+    expect(nextState.matchScores).toEqual([4, 9]);
+    expectFreshRoundState(nextState);
+  });
+
+  test("updates match state when player 0 wins", () => {
+    const matchState = makeFinishedMatchState(0, 3);
+
+    const nextState = startNewRound(matchState, 0);
+
+    expect(nextState.dealerIndex).toBe(1);
+    expect(nextState.leaderIndex).toBe(0);
+    expect(nextState.matchScores).toEqual([7, 7]);
+    expectFreshRoundState(nextState);
+  });
+
+  test("throws when round result is missing", () => {
+    const matchState = {
+      game: {
+        ...makeState([[], []]),
+      },
+      matchScores: [0, 0],
+      dealerIndex: 0,
+      leaderIndex: 1,
+    } as const;
+
+    expect(() => startNewRound(matchState, 0)).toThrow("Round has not ended.");
+  });
+
+  test("throws when round winner does not match round result", () => {
+    const matchState = makeFinishedMatchState(1, 1);
+
+    expect(() => startNewRound(matchState, 0)).toThrow(
+      "Round winner does not match the round result.",
+    );
   });
 });
 

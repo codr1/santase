@@ -71,6 +71,36 @@ export function startMatch(): MatchState {
   };
 }
 
+export function startNewRound(
+  matchState: MatchState,
+  roundWinnerIndex: 0 | 1,
+): MatchState {
+  const roundResult = matchState.game.roundResult;
+  if (!roundResult) {
+    throw new Error("Round has not ended.");
+  }
+  if (roundWinnerIndex !== roundResult.winner) {
+    throw new Error("Round winner does not match the round result.");
+  }
+
+  const nextMatchScores: [number, number] = [
+    matchState.matchScores[0],
+    matchState.matchScores[1],
+  ];
+  nextMatchScores[roundWinnerIndex] += roundResult.gamePoints;
+
+  const dealerIndex = roundWinnerIndex === 0 ? 1 : 0;
+  const leaderIndex = roundWinnerIndex;
+  const deck = shuffleDeck(createDeck());
+
+  return {
+    game: dealInitialHands(deck, dealerIndex),
+    matchScores: nextMatchScores,
+    dealerIndex,
+    leaderIndex,
+  };
+}
+
 export function initializeMatch(): MatchState {
   return startMatch();
 }
