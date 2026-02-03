@@ -17,7 +17,7 @@ export const CARD_POINTS: Record<Rank, number> = {
 
 export const RANK_ORDER: Rank[] = ["9", "J", "Q", "K", "10", "A"];
 
-const SUITS: Suit[] = ["hearts", "diamonds", "clubs", "spades"];
+export const SUITS: Suit[] = ["hearts", "diamonds", "clubs", "spades"];
 const RANKS: Rank[] = ["9", "10", "J", "Q", "K", "A"];
 
 export function createDeck(): Card[] {

@@ -1,4 +1,4 @@
-import type { Card, Suit } from "./cards";
+import { SUITS, type Card, type Suit } from "./cards";
 
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
@@ -72,4 +72,23 @@ export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
   }
 
   return false;
+}
+
+export function canDeclareMarriage(
+  state: GameState,
+  playerIndex: 0 | 1,
+  suit: Suit,
+): boolean {
+  if (state.declaredMarriages.includes(suit)) {
+    return false;
+  }
+
+  return hasPotentialMarriage(state.playerHands[playerIndex], suit);
+}
+
+export function findDeclareableMarriages(
+  state: GameState,
+  playerIndex: 0 | 1,
+): Suit[] {
+  return SUITS.filter((suit) => canDeclareMarriage(state, playerIndex, suit));
 }
