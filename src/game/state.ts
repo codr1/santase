@@ -4,7 +4,9 @@ import {
   SUITS,
   compareCards,
   compareTrick,
+  createDeck,
   getMarriagePoints,
+  shuffleDeck,
   type Card,
   type Suit,
 } from "./cards";
@@ -45,13 +47,32 @@ export type GameState = {
 };
 
 export type MatchState = {
+  game: GameState;
   matchScores: [number, number];
+  dealerIndex: 0 | 1;
+  leaderIndex: 0 | 1;
 };
 
-export function initializeMatch(): MatchState {
+function randomDealerIndex(): 0 | 1 {
+  const values = crypto.getRandomValues(new Uint32Array(1));
+  return (values[0] % 2) as 0 | 1;
+}
+
+export function startMatch(): MatchState {
+  const dealerIndex = randomDealerIndex();
+  const leaderIndex = dealerIndex === 0 ? 1 : 0;
+  const deck = shuffleDeck(createDeck());
+
   return {
+    game: dealInitialHands(deck, dealerIndex),
     matchScores: [0, 0],
+    dealerIndex,
+    leaderIndex,
   };
+}
+
+export function initializeMatch(): MatchState {
+  return startMatch();
 }
 
 export function applyRoundResult(
@@ -62,6 +83,7 @@ export function applyRoundResult(
   const nextScores: [number, number] = [...matchState.matchScores];
   nextScores[winnerIndex] += points;
   return {
+    ...matchState,
     matchScores: nextScores,
   };
 }
