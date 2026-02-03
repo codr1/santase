@@ -146,6 +146,10 @@ export function canExchangeTrump9(state: GameState, playerIndex: 0 | 1): boolean
     return false;
   }
 
+  if (!state.trumpCard) {
+    return false;
+  }
+
   if (state.stock.length <= 2) {
     return false;
   }
@@ -225,6 +229,10 @@ export function exchangeTrump9(state: GameState, playerIndex: 0 | 1): GameState 
     throw new Error("Player cannot exchange the trump 9.");
   }
 
+  if (!state.trumpCard) {
+    throw new Error("Trump card is not available for exchange.");
+  }
+
   const playerHand = state.playerHands[playerIndex];
   const trump9Index = playerHand.findIndex(
     (card) => card.rank === "9" && card.suit === state.trumpSuit,
@@ -293,9 +301,9 @@ export function playTrick(
     leaderIndex === 0 ? [nextLeaderHand, nextFollowerHand] : [nextFollowerHand, nextLeaderHand];
 
   const winnerOffset = compareTrick(leaderCard, followerCard, leaderCard.suit, state.trumpSuit);
-  const winnerIndex = winnerOffset === 0 ? leaderIndex : followerIndex;
+  const winnerIndex: 0 | 1 = winnerOffset === 0 ? leaderIndex : followerIndex;
   const trickPoints = CARD_POINTS[leaderCard.rank] + CARD_POINTS[followerCard.rank];
-  const nextLeader = winnerIndex as 0 | 1;
+  const nextLeader = winnerIndex;
 
   const nextWonTricks: [Card[], Card[]] = [
     [...state.wonTricks[0]],

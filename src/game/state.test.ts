@@ -58,7 +58,7 @@ describe("dealInitialHands", () => {
 
   test("defaults isClosed to false", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 1);
 
     expect(state.isClosed).toBe(false);
   });
@@ -112,7 +112,7 @@ describe("isDeckClosedOrExhausted", () => {
       expected: false,
     },
   ])("$label", ({ state, expected }) => {
-    const baseState = dealInitialHands(createDeck());
+    const baseState = dealInitialHands(createDeck(), 1);
     const testState: GameState = { ...baseState, ...state };
 
     expect(isDeckClosedOrExhausted(testState)).toBe(expected);
@@ -311,6 +311,18 @@ describe("canExchangeTrump9", () => {
       [],
       { stock: createDeck().slice(0, 4), trumpSuit: "diamonds", leader: 1 },
     );
+
+    expect(canExchangeTrump9(state, 0)).toBe(false);
+  });
+
+  test("returns false when trump card is missing", () => {
+    const baseState = makeState(
+      [[{ suit: "hearts", rank: "9" }], []],
+      [],
+      { stock: createDeck().slice(0, 4), trumpSuit: "hearts", leader: 0 },
+    );
+
+    const state: GameState = { ...baseState, trumpCard: null };
 
     expect(canExchangeTrump9(state, 0)).toBe(false);
   });
