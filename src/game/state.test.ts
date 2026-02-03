@@ -14,6 +14,7 @@ import {
   declareMarriage,
   dealInitialHands,
   drawFromStock,
+  exchangeTrump9,
   findDeclareableMarriages,
   getValidFollowerCards,
   getStockCount,
@@ -361,6 +362,86 @@ describe("hasPotentialMarriage", () => {
     ];
 
     expect(hasPotentialMarriage(hand, "diamonds")).toBe(false);
+  });
+});
+
+describe("exchangeTrump9", () => {
+  test("swaps the trump 9 with the trump card and keeps trump suit", () => {
+    const state = makeState(
+      [
+        [
+          { suit: "hearts", rank: "9" },
+          { suit: "spades", rank: "A" },
+        ],
+        [{ suit: "clubs", rank: "K" }],
+      ],
+      [],
+      {
+        stock: createDeck().slice(0, 4),
+        trumpSuit: "hearts",
+        trumpCard: { suit: "hearts", rank: "A" },
+        leader: 0,
+      },
+    );
+
+    const nextState = exchangeTrump9(state, 0);
+
+    expect(nextState.trumpCard).toEqual({ suit: "hearts", rank: "9" });
+    expect(nextState.trumpSuit).toBe("hearts");
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "spades", rank: "A" },
+      { suit: "hearts", rank: "A" },
+    ]);
+    expect(nextState.playerHands[1]).toEqual([{ suit: "clubs", rank: "K" }]);
+    expect(state.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "9" },
+      { suit: "spades", rank: "A" },
+    ]);
+    expect(state.playerHands[1]).toEqual([{ suit: "clubs", rank: "K" }]);
+  });
+
+  test("swaps correctly for player 1", () => {
+    const state = makeState(
+      [
+        [{ suit: "spades", rank: "K" }],
+        [
+          { suit: "diamonds", rank: "9" },
+          { suit: "clubs", rank: "Q" },
+        ],
+      ],
+      [],
+      {
+        stock: createDeck().slice(0, 4),
+        trumpSuit: "diamonds",
+        trumpCard: { suit: "diamonds", rank: "A" },
+        leader: 1,
+      },
+    );
+
+    const nextState = exchangeTrump9(state, 1);
+
+    expect(nextState.trumpCard).toEqual({ suit: "diamonds", rank: "9" });
+    expect(nextState.trumpSuit).toBe("diamonds");
+    expect(nextState.playerHands[0]).toEqual([{ suit: "spades", rank: "K" }]);
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "clubs", rank: "Q" },
+      { suit: "diamonds", rank: "A" },
+    ]);
+    expect(state.playerHands[0]).toEqual([{ suit: "spades", rank: "K" }]);
+    expect(state.playerHands[1]).toEqual([
+      { suit: "diamonds", rank: "9" },
+      { suit: "clubs", rank: "Q" },
+    ]);
+  });
+
+  test("throws when exchange is not allowed", () => {
+    const state = makeState(
+      [[{ suit: "hearts", rank: "9" }], []],
+      [],
+      { stock: createDeck().slice(0, 2), trumpSuit: "hearts", leader: 0 },
+    );
+
+    expect(() => exchangeTrump9(state, 0)).toThrow("Player cannot exchange the trump 9.");
   });
 });
 
