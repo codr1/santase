@@ -44,3 +44,7 @@ export function dealInitialHands(deck: Card[]): GameState {
     roundScores: [0, 0],
   };
 }
+
+export function getStockCount(state: GameState): number {
+  return state.stock.length;
+}
