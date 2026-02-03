@@ -21,6 +21,7 @@ import {
   canCloseDeck,
   closeDeck,
   hasPotentialMarriage,
+  initializeMatch,
   isDeckClosedOrExhausted,
   playTrick,
   type GameState,
@@ -293,6 +294,22 @@ describe("closeDeck", () => {
     const nextState = closeDeck(testState, 0);
 
     expect(isDeckClosedOrExhausted(nextState)).toBe(true);
+  });
+});
+
+describe("initializeMatch", () => {
+  test("returns a match state with zeroed scores", () => {
+    expect(initializeMatch()).toEqual({ matchScores: [0, 0] });
+  });
+
+  test("returns fresh score arrays per call", () => {
+    const firstMatch = initializeMatch();
+    const secondMatch = initializeMatch();
+
+    expect(firstMatch).not.toBe(secondMatch);
+    expect(firstMatch.matchScores).not.toBe(secondMatch.matchScores);
+    expect(firstMatch.matchScores).toEqual([0, 0]);
+    expect(secondMatch.matchScores).toEqual([0, 0]);
   });
 });
 

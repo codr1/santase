@@ -44,7 +44,17 @@ export type GameState = {
   roundResult: RoundResult | null;
 };
 
-export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1): GameState {
+export type MatchState = {
+  matchScores: [number, number];
+};
+
+export function initializeMatch(): MatchState {
+  return {
+    matchScores: [0, 0],
+  };
+}
+
+export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1 = 0): GameState {
   if (deck.length < HAND_SIZE * 2 + 1) {
     throw new Error("Deck does not have enough cards to deal a new round.");
   }

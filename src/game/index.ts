@@ -11,8 +11,9 @@ export {
   shuffleDeck,
   getMarriagePoints,
 } from "./cards";
-export type { GameState, RoundResult } from "./state";
+export type { GameState, MatchState, RoundResult } from "./state";
 export {
+  initializeMatch,
   dealInitialHands,
   getStockCount,
   canCloseDeck,
