@@ -10,6 +10,7 @@ import {
   canDeclare66,
   calculateGamePoints,
   declare66,
+  canExchangeTrump9,
   declareMarriage,
   dealInitialHands,
   drawFromStock,
@@ -107,6 +108,9 @@ describe("isDeckClosedOrExhausted", () => {
     const testState: GameState = { ...baseState, ...state };
 
     expect(isDeckClosedOrExhausted(testState)).toBe(expected);
+  });
+});
+
 describe("canDeclare66", () => {
   test("returns true when player has exactly 66 points", () => {
     const state = makeState([[], []]);
@@ -266,6 +270,64 @@ describe("declare66", () => {
   });
 });
 
+describe("canExchangeTrump9", () => {
+  test("returns false when player does not hold the trump 9", () => {
+    const state = makeState(
+      [
+        [
+          { suit: "hearts", rank: "K" },
+          { suit: "spades", rank: "9" },
+        ],
+        [],
+      ],
+      [],
+      { stock: createDeck().slice(0, 3), trumpSuit: "hearts", leader: 0 },
+    );
+
+    expect(canExchangeTrump9(state, 0)).toBe(false);
+  });
+
+  test("returns false when stock has two or fewer cards", () => {
+    const state = makeState(
+      [[{ suit: "clubs", rank: "9" }], []],
+      [],
+      { stock: createDeck().slice(0, 2), trumpSuit: "clubs", leader: 0 },
+    );
+
+    expect(canExchangeTrump9(state, 0)).toBe(false);
+  });
+
+  test("returns false when player is not the leader", () => {
+    const state = makeState(
+      [[{ suit: "diamonds", rank: "9" }], []],
+      [],
+      { stock: createDeck().slice(0, 4), trumpSuit: "diamonds", leader: 1 },
+    );
+
+    expect(canExchangeTrump9(state, 0)).toBe(false);
+  });
+
+  test("returns true when all conditions are met", () => {
+    const state = makeState(
+      [[{ suit: "spades", rank: "9" }], []],
+      [],
+      { stock: createDeck().slice(0, 5), trumpSuit: "spades", leader: 0 },
+    );
+
+    expect(canExchangeTrump9(state, 0)).toBe(true);
+  });
+
+  test("returns true for player 1 when all conditions are met", () => {
+    const state = makeState(
+      [[], [{ suit: "hearts", rank: "9" }]],
+      [],
+      { stock: createDeck().slice(0, 4), trumpSuit: "hearts", leader: 1 },
+    );
+
+    expect(canExchangeTrump9(state, 1)).toBe(true);
+  });
+});
+
 describe("hasPotentialMarriage", () => {
   test("returns true when hand has king and queen of suit", () => {
     const hand = [
@@ -305,14 +367,18 @@ describe("hasPotentialMarriage", () => {
 function makeState(
   playerHands: [GameState["playerHands"][0], GameState["playerHands"][1]],
   declaredMarriages: GameState["declaredMarriages"] = [],
+  overrides: Partial<Pick<GameState, "stock" | "trumpSuit" | "trumpCard" | "leader">> = {},
 ): GameState {
+  const trumpSuit = overrides.trumpSuit ?? overrides.trumpCard?.suit ?? "hearts";
+  const trumpCard = overrides.trumpCard ?? { suit: trumpSuit, rank: "9" };
+
   return {
     playerHands,
-    stock: [],
-    trumpCard: { suit: "hearts", rank: "9" },
-    trumpSuit: "hearts",
+    stock: overrides.stock ?? [],
+    trumpCard,
+    trumpSuit,
+    leader: overrides.leader ?? 0,
     isClosed: false,
-    leader: 0,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages,

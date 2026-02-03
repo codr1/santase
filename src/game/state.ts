@@ -138,6 +138,20 @@ export function calculateGamePoints(opponentScore: number): 1 | 2 | 3 {
   return STANDARD_GAME_POINTS;
 }
 
+export function canExchangeTrump9(state: GameState, playerIndex: 0 | 1): boolean {
+  if (state.leader !== playerIndex) {
+    return false;
+  }
+
+  if (state.stock.length <= 2) {
+    return false;
+  }
+
+  return state.playerHands[playerIndex].some(
+    (card) => card.rank === "9" && card.suit === state.trumpSuit,
+  );
+}
+
 export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
   let hasKing = false;
   let hasQueen = false;
