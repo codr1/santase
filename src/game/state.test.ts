@@ -32,6 +32,7 @@ describe("dealInitialHands", () => {
     const deck = createDeck();
     const state = dealInitialHands(deck);
 
+    expect(state.trumpCard).not.toBeNull();
     expect(deck).toContainEqual(state.trumpCard);
   });
 
@@ -39,6 +40,7 @@ describe("dealInitialHands", () => {
     const deck = createDeck();
     const state = dealInitialHands(deck);
 
+    expect(state.trumpCard).not.toBeNull();
     expect(state.trumpSuit).toBe(state.trumpCard.suit);
   });
 
@@ -335,6 +337,64 @@ describe("drawFromStock", () => {
     ]);
   });
 
+  test("uses trump card for final draw and clears it", () => {
+    const state: GameState = {
+      playerHands: [
+        [{ suit: "hearts", rank: "A" }],
+        [{ suit: "clubs", rank: "Q" }],
+      ],
+      stock: [{ suit: "clubs", rank: "9" }],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    const nextState = drawFromStock(state, 0);
+
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "A" },
+      { suit: "clubs", rank: "9" },
+    ]);
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "clubs", rank: "Q" },
+      { suit: "spades", rank: "A" },
+    ]);
+    expect(nextState.stock).toEqual([]);
+    expect(nextState.trumpCard).toBeNull();
+    expect(nextState.trumpSuit).toBe("spades");
+  });
+
+  test("uses trump card for final draw when player one wins", () => {
+    const state: GameState = {
+      playerHands: [
+        [{ suit: "hearts", rank: "A" }],
+        [{ suit: "clubs", rank: "Q" }],
+      ],
+      stock: [{ suit: "clubs", rank: "9" }],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    const nextState = drawFromStock(state, 1);
+
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "clubs", rank: "Q" },
+      { suit: "clubs", rank: "9" },
+    ]);
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "A" },
+      { suit: "spades", rank: "A" },
+    ]);
+    expect(nextState.stock).toEqual([]);
+    expect(nextState.trumpCard).toBeNull();
+    expect(nextState.trumpSuit).toBe("spades");
+  });
+
   test("assigns cards correctly when player one wins", () => {
     const state: GameState = {
       playerHands: [
@@ -366,10 +426,10 @@ describe("drawFromStock", () => {
     expect(nextState.stock).toEqual([{ suit: "hearts", rank: "9" }]);
   });
 
-  test("throws when stock has fewer than two cards", () => {
+  test("throws when stock is empty", () => {
     const state: GameState = {
       playerHands: [[], []],
-      stock: [{ suit: "clubs", rank: "9" }],
+      stock: [],
       trumpCard: { suit: "spades", rank: "A" },
       trumpSuit: "spades",
       wonTricks: [[], []],
