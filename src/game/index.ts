@@ -10,7 +10,7 @@ export {
   shuffleDeck,
   getMarriagePoints,
 } from "./cards";
-export type { GameState } from "./state";
+export type { GameState, RoundResult } from "./state";
 export {
   dealInitialHands,
   getStockCount,

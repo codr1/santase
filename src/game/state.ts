@@ -22,6 +22,19 @@ export type GameState = {
   declaredMarriages: Suit[];
 };
 
+export type RoundResult = {
+  winner: 0 | 1;
+  gamePoints: 1 | 2 | 3;
+  /**
+   * Round end condition:
+   * - declared_66: player declares 66 and has at least 66 points.
+   * - false_declaration: player declares 66 but has fewer than 66 points.
+   * - exhausted: stock and hands are empty after the final trick.
+   * - closed_failed: player closed the stock but failed to reach 66.
+   */
+  reason: "declared_66" | "false_declaration" | "exhausted" | "closed_failed";
+};
+
 export function dealInitialHands(deck: Card[]): GameState {
   if (deck.length < HAND_SIZE * 2 + 1) {
     throw new Error("Deck does not have enough cards to deal a new round.");
