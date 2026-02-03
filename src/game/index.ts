@@ -18,6 +18,7 @@ export {
   canDeclareMarriage,
   findDeclareableMarriages,
   declareMarriage,
+  getValidFollowerCards,
   playTrick,
   drawFromStock,
 } from "./state";

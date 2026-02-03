@@ -1,6 +1,7 @@
 import {
   CARD_POINTS,
   SUITS,
+  compareCards,
   compareTrick,
   getMarriagePoints,
   type Card,
@@ -182,6 +183,7 @@ export function playTrick(
   };
 }
 
+<<<<<<< HEAD
 export function drawFromStock(state: GameState, winnerIndex: 0 | 1): GameState {
   if (state.stock.length === 0) {
     return state;
@@ -230,4 +232,34 @@ export function drawFromStock(state: GameState, winnerIndex: 0 | 1): GameState {
     stock: nextStock,
     playerHands: nextHands,
   };
+}
+
+/**
+ * Returns playable follower cards under Santase "must-head" rules
+ * when the deck is closed or exhausted.
+ */
+export function getValidFollowerCards(
+  hand: Card[],
+  ledCard: Card,
+  trumpSuit: Suit,
+  deckClosedOrExhausted: boolean,
+): Card[] {
+  if (!deckClosedOrExhausted) {
+    return hand;
+  }
+
+  const ledSuitCards = hand.filter((card) => card.suit === ledCard.suit);
+  if (ledSuitCards.length > 0) {
+    const winningLedSuitCards = ledSuitCards.filter(
+      (card) => compareCards(card, ledCard) === -1,
+    );
+    return winningLedSuitCards.length > 0 ? winningLedSuitCards : ledSuitCards;
+  }
+
+  const trumpCards = hand.filter((card) => card.suit === trumpSuit);
+  if (trumpCards.length > 0) {
+    return trumpCards;
+  }
+
+  return hand;
 }

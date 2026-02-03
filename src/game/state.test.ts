@@ -6,6 +6,7 @@ import {
   dealInitialHands,
   drawFromStock,
   findDeclareableMarriages,
+  getValidFollowerCards,
   getStockCount,
   hasPotentialMarriage,
   playTrick,
@@ -548,5 +549,142 @@ describe("playTrick", () => {
         { suit: "diamonds", rank: "9" },
       ),
     ).toThrow("Follower card not found in hand.");
+  });
+});
+
+describe("getValidFollowerCards", () => {
+  test("returns the full hand when the deck is open", () => {
+    const hand = [
+      { suit: "hearts", rank: "9" },
+      { suit: "spades", rank: "A" },
+      { suit: "clubs", rank: "Q" },
+    ];
+
+    expect(
+      getValidFollowerCards(
+        hand,
+        { suit: "hearts", rank: "K" },
+        "spades",
+        false,
+      ),
+    ).toEqual(hand);
+  });
+
+  test("returns led suit cards that beat the led card when possible", () => {
+    const hand = [
+      { suit: "hearts", rank: "9" },
+      { suit: "hearts", rank: "A" },
+      { suit: "hearts", rank: "10" },
+      { suit: "clubs", rank: "K" },
+    ];
+
+    expect(
+      getValidFollowerCards(
+        hand,
+        { suit: "hearts", rank: "K" },
+        "spades",
+        true,
+      ),
+    ).toEqual([
+      { suit: "hearts", rank: "A" },
+      { suit: "hearts", rank: "10" },
+    ]);
+  });
+
+  test("returns all led suit cards when none can beat the led card", () => {
+    const hand = [
+      { suit: "hearts", rank: "9" },
+      { suit: "hearts", rank: "Q" },
+      { suit: "clubs", rank: "A" },
+    ];
+
+    expect(
+      getValidFollowerCards(
+        hand,
+        { suit: "hearts", rank: "K" },
+        "spades",
+        true,
+      ),
+    ).toEqual([
+      { suit: "hearts", rank: "9" },
+      { suit: "hearts", rank: "Q" },
+    ]);
+  });
+
+  test("returns higher trumps when the led card is trump", () => {
+    const hand = [
+      { suit: "hearts", rank: "A" },
+      { suit: "spades", rank: "K" },
+      { suit: "spades", rank: "A" },
+      { suit: "clubs", rank: "9" },
+    ];
+
+    expect(
+      getValidFollowerCards(
+        hand,
+        { suit: "spades", rank: "J" },
+        "spades",
+        true,
+      ),
+    ).toEqual([
+      { suit: "spades", rank: "K" },
+      { suit: "spades", rank: "A" },
+    ]);
+  });
+
+  test("returns all trumps when none can beat the led trump", () => {
+    const hand = [
+      { suit: "spades", rank: "9" },
+      { suit: "spades", rank: "K" },
+      { suit: "hearts", rank: "A" },
+    ];
+
+    expect(
+      getValidFollowerCards(
+        hand,
+        { suit: "spades", rank: "A" },
+        "spades",
+        true,
+      ),
+    ).toEqual([
+      { suit: "spades", rank: "9" },
+      { suit: "spades", rank: "K" },
+    ]);
+  });
+
+  test("returns all trumps when no led suit cards are present", () => {
+    const hand = [
+      { suit: "clubs", rank: "9" },
+      { suit: "spades", rank: "J" },
+      { suit: "spades", rank: "9" },
+    ];
+
+    expect(
+      getValidFollowerCards(
+        hand,
+        { suit: "hearts", rank: "A" },
+        "spades",
+        true,
+      ),
+    ).toEqual([
+      { suit: "spades", rank: "J" },
+      { suit: "spades", rank: "9" },
+    ]);
+  });
+
+  test("returns the full hand when no led suit or trump cards exist", () => {
+    const hand = [
+      { suit: "clubs", rank: "9" },
+      { suit: "diamonds", rank: "J" },
+    ];
+
+    expect(
+      getValidFollowerCards(
+        hand,
+        { suit: "hearts", rank: "A" },
+        "spades",
+        true,
+      ),
+    ).toEqual(hand);
   });
 });
