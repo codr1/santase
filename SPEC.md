@@ -22,6 +22,8 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | GET | `/rooms?code=X` | Look up room by code, redirects to room |
 | GET | `/rooms/:code` | Guest lobby view |
 | GET | `/rooms/:code/lobby` | Host lobby view |
+| GET | `/rooms/:code/game` | Game page view |
+| POST | `/rooms/:code/start` | Start game (host only, requires hostToken) |
 | GET | `/sse/:code` | SSE connection endpoint |
 
 ## Rooms
@@ -54,15 +56,27 @@ Server-Sent Events for real-time communication.
 
 - **Endpoint**: `/sse/:code?hostToken=X` (token optional, identifies host)
 - **Heartbeat**: Every 25 seconds (comment ping)
-- **Events**: `connected` (sent to all when guest first joins)
 - **Cleanup**: Room deleted if host disconnects before guest ever joins
+
+### Events
+
+| Event | Target | Data |
+|-------|--------|------|
+| `connected` | all | `"guest"` when guest first joins |
+| `status` | all | Lobby status HTML (`<span>` with connection state) |
+| `start-game` | host | Start button HTML (empty when guest disconnected) |
+| `game-start` | all | Game URL path for redirect |
+
+### Functions
+
+- `startGame(roomCode)`: Broadcasts `game-start` event with game URL to all clients
 
 ## Templates
 
 HTML rendering with HTMX integration.
 
 - **Layout**: Common HTML shell with HTMX + SSE extension scripts
-- **Pages**: Home, Join, Lobby
+- **Pages**: Home, Join, Lobby, Game
 - **XSS protection**: All dynamic content escaped via `escapeHtml()`
 
 ## Game
