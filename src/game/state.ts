@@ -54,6 +54,44 @@ export function initializeMatch(): MatchState {
   };
 }
 
+export function applyRoundResult(
+  matchState: MatchState,
+  winnerIndex: 0 | 1,
+  points: 1 | 2 | 3,
+): MatchState {
+  const nextScores: [number, number] = [...matchState.matchScores];
+  nextScores[winnerIndex] += points;
+  return {
+    matchScores: nextScores,
+  };
+}
+
+export function isMatchOver(matchState: MatchState): boolean {
+  return matchState.matchScores[0] >= 11 || matchState.matchScores[1] >= 11;
+}
+
+export function getMatchWinner(matchState: MatchState): 0 | 1 | null {
+  const [playerOneScore, playerTwoScore] = matchState.matchScores;
+
+  if (
+    playerOneScore >= 11 &&
+    playerTwoScore >= 11 &&
+    playerOneScore === playerTwoScore
+  ) {
+    throw new Error("Match state is invalid: tied score at or above 11.");
+  }
+
+  if (playerOneScore >= 11 && playerOneScore > playerTwoScore) {
+    return 0;
+  }
+
+  if (playerTwoScore >= 11 && playerTwoScore > playerOneScore) {
+    return 1;
+  }
+
+  return null;
+}
+
 export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1 = 0): GameState {
   if (deck.length < HAND_SIZE * 2 + 1) {
     throw new Error("Deck does not have enough cards to deal a new round.");

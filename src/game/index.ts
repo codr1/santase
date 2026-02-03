@@ -14,6 +14,9 @@ export {
 export type { GameState, MatchState, RoundResult } from "./state";
 export {
   initializeMatch,
+  applyRoundResult,
+  isMatchOver,
+  getMatchWinner,
   dealInitialHands,
   getStockCount,
   canCloseDeck,

@@ -16,6 +16,9 @@ import {
   drawFromStock,
   exchangeTrump9,
   findDeclareableMarriages,
+  applyRoundResult,
+  getMatchWinner,
+  isMatchOver,
   getValidFollowerCards,
   getStockCount,
   canCloseDeck,
@@ -310,6 +313,51 @@ describe("initializeMatch", () => {
     expect(firstMatch.matchScores).not.toBe(secondMatch.matchScores);
     expect(firstMatch.matchScores).toEqual([0, 0]);
     expect(secondMatch.matchScores).toEqual([0, 0]);
+  });
+});
+
+describe("applyRoundResult", () => {
+  test("increments the winner's match score", () => {
+    const matchState = initializeMatch();
+
+    const nextState = applyRoundResult(matchState, 1, 2);
+
+    expect(nextState).toEqual({ matchScores: [0, 2] });
+    expect(matchState).toEqual({ matchScores: [0, 0] });
+  });
+});
+
+describe("isMatchOver", () => {
+  test("returns true when a player reaches 11 points", () => {
+    expect(isMatchOver({ matchScores: [11, 7] })).toBe(true);
+  });
+
+  test("returns true when a player exceeds 11 points", () => {
+    expect(isMatchOver({ matchScores: [6, 12] })).toBe(true);
+  });
+
+  test("returns false when no player has reached 11 points", () => {
+    expect(isMatchOver({ matchScores: [10, 9] })).toBe(false);
+  });
+});
+
+describe("getMatchWinner", () => {
+  test("returns null when no one has reached 11 points", () => {
+    expect(getMatchWinner({ matchScores: [10, 9] })).toBeNull();
+  });
+
+  test("returns the player who reaches 11 points", () => {
+    expect(getMatchWinner({ matchScores: [11, 6] })).toBe(0);
+  });
+
+  test("returns the player who exceeds 11 points", () => {
+    expect(getMatchWinner({ matchScores: [4, 14] })).toBe(1);
+  });
+
+  test("throws when the match is tied at or above 11 points", () => {
+    expect(() => getMatchWinner({ matchScores: [11, 11] })).toThrow(
+      "Match state is invalid: tied score at or above 11.",
+    );
   });
 });
 
