@@ -50,6 +50,13 @@ describe("dealInitialHands", () => {
 
     expect(state.declaredMarriages).toEqual([]);
   });
+
+  test("sets player 0 as the initial leader", () => {
+    const deck = createDeck();
+    const state = dealInitialHands(deck);
+
+    expect(state.leader).toBe(0);
+  });
 });
 
 describe("getStockCount", () => {
@@ -106,6 +113,7 @@ function makeState(
     stock: [],
     trumpCard: { suit: "hearts", rank: "9" },
     trumpSuit: "hearts",
+    leader: 0,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages,
@@ -442,6 +450,7 @@ describe("playTrick", () => {
       stock: [],
       trumpCard: { suit: "spades", rank: "9" },
       trumpSuit: "spades",
+      leader: 0,
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
@@ -470,6 +479,7 @@ describe("playTrick", () => {
       stock: [],
       trumpCard: { suit: "spades", rank: "A" },
       trumpSuit: "spades",
+      leader: 0,
       wonTricks: [
         [{ suit: "clubs", rank: "K" }],
         [{ suit: "diamonds", rank: "Q" }],
@@ -502,6 +512,7 @@ describe("playTrick", () => {
       stock: [],
       trumpCard: { suit: "spades", rank: "9" },
       trumpSuit: "spades",
+      leader: 0,
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
@@ -523,6 +534,7 @@ describe("playTrick", () => {
       stock: [],
       trumpCard: { suit: "spades", rank: "9" },
       trumpSuit: "spades",
+      leader: 0,
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
