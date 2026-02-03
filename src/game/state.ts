@@ -1,4 +1,4 @@
-import type { Card, Suit } from "./cards";
+import { SUITS, getMarriagePoints, type Card, type Suit } from "./cards";
 
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
@@ -10,6 +10,7 @@ export type GameState = {
   trumpSuit: Suit;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
+  declaredMarriages: Suit[];
 };
 
 export function dealInitialHands(deck: Card[]): GameState {
@@ -42,9 +43,71 @@ export function dealInitialHands(deck: Card[]): GameState {
     trumpSuit: trumpCard.suit,
     wonTricks: [[], []],
     roundScores: [0, 0],
+    declaredMarriages: [],
   };
 }
 
 export function getStockCount(state: GameState): number {
   return state.stock.length;
+}
+
+export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
+  let hasKing = false;
+  let hasQueen = false;
+
+  for (const card of hand) {
+    if (card.suit !== suit) {
+      continue;
+    }
+
+    if (card.rank === "K") {
+      hasKing = true;
+    } else if (card.rank === "Q") {
+      hasQueen = true;
+    }
+
+    if (hasKing && hasQueen) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function canDeclareMarriage(
+  state: GameState,
+  playerIndex: 0 | 1,
+  suit: Suit,
+): boolean {
+  if (state.declaredMarriages.includes(suit)) {
+    return false;
+  }
+
+  return hasPotentialMarriage(state.playerHands[playerIndex], suit);
+}
+
+export function findDeclareableMarriages(
+  state: GameState,
+  playerIndex: 0 | 1,
+): Suit[] {
+  return SUITS.filter((suit) => canDeclareMarriage(state, playerIndex, suit));
+}
+
+export function declareMarriage(
+  state: GameState,
+  playerIndex: 0 | 1,
+  suit: Suit,
+): GameState {
+  if (!canDeclareMarriage(state, playerIndex, suit)) {
+    throw new Error("Player cannot declare marriage for this suit.");
+  }
+
+  const updatedScores: [number, number] = [...state.roundScores];
+  updatedScores[playerIndex] += getMarriagePoints(suit, state.trumpSuit);
+
+  return {
+    ...state,
+    declaredMarriages: [...state.declaredMarriages, suit],
+    roundScores: updatedScores,
+  };
 }
