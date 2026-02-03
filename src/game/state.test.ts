@@ -18,6 +18,7 @@ import {
   findDeclareableMarriages,
   getValidFollowerCards,
   getStockCount,
+  canCloseDeck,
   hasPotentialMarriage,
   isDeckClosedOrExhausted,
   playTrick,
@@ -123,6 +124,70 @@ describe("isDeckClosedOrExhausted", () => {
     const testState: GameState = { ...baseState, ...state };
 
     expect(isDeckClosedOrExhausted(testState)).toBe(expected);
+  });
+});
+
+describe("canCloseDeck", () => {
+  test("returns true when stock has at least 3 cards, deck is open, and trump card exists", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+    };
+
+    expect(canCloseDeck(testState)).toBe(true);
+  });
+
+  test("returns false when stock has fewer than 3 cards", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 2),
+      isClosed: false,
+    };
+
+    expect(canCloseDeck(testState)).toBe(false);
+  });
+
+  test("returns false when the deck is already closed", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: true,
+    };
+
+    expect(canCloseDeck(testState)).toBe(false);
+  });
+
+  test("returns false when the trump card is null", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      trumpCard: null,
+    };
+
+    expect(canCloseDeck(testState)).toBe(false);
+  });
+
+  test("returns false when the round already ended", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+      roundResult: {
+        winner: 0,
+        gamePoints: 3,
+        reason: "declared_66",
+      },
+    };
+
+    expect(canCloseDeck(testState)).toBe(false);
   });
 });
 

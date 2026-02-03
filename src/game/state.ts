@@ -92,6 +92,13 @@ export function isDeckClosedOrExhausted(state: GameState): boolean {
   return state.isClosed || state.stock.length === 0;
 }
 
+export function canCloseDeck(state: GameState): boolean {
+  if (state.roundResult) {
+    return false;
+  }
+  return state.stock.length >= 3 && !state.isClosed && state.trumpCard !== null;
+}
+
 export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
   if (state.roundResult) {
     return false;
