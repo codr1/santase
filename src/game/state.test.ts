@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { MARRIAGE_POINTS, TRUMP_MARRIAGE_POINTS, createDeck } from "./cards";
+import {
+  DECLARE_THRESHOLD,
+  MARRIAGE_POINTS,
+  TRUMP_MARRIAGE_POINTS,
+  createDeck,
+} from "./cards";
 import {
   canDeclareMarriage,
+  canDeclare66,
+  calculateGamePoints,
+  declare66,
   declareMarriage,
   dealInitialHands,
   drawFromStock,
@@ -92,6 +100,162 @@ describe("isDeckClosedOrExhausted", () => {
     const testState: GameState = { ...baseState, ...state };
 
     expect(isDeckClosedOrExhausted(testState)).toBe(expected);
+describe("canDeclare66", () => {
+  test("returns true when player has exactly 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 10];
+
+    expect(canDeclare66(state, 0)).toBe(true);
+  });
+
+  test("returns true when player is above 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD + 6, 0];
+
+    expect(canDeclare66(state, 0)).toBe(true);
+  });
+
+  test("returns false when player is below 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD - 1, DECLARE_THRESHOLD + 14];
+
+    expect(canDeclare66(state, 0)).toBe(false);
+  });
+
+  test("returns true when player two meets the threshold", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [10, DECLARE_THRESHOLD];
+
+    expect(canDeclare66(state, 1)).toBe(true);
+  });
+
+  test("returns false when the round already ended", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 0];
+    state.roundResult = {
+      winner: 0,
+      gamePoints: 3,
+      reason: "declared_66",
+    };
+
+    expect(canDeclare66(state, 0)).toBe(false);
+  });
+});
+
+describe("calculateGamePoints", () => {
+  test("returns 3 when opponent has 0 points", () => {
+    expect(calculateGamePoints(0)).toBe(3);
+  });
+
+  test("returns 2 when opponent has 1-32 points", () => {
+    expect(calculateGamePoints(1)).toBe(2);
+    expect(calculateGamePoints(32)).toBe(2);
+  });
+
+  test("returns 1 when opponent has 33 or more points", () => {
+    expect(calculateGamePoints(33)).toBe(1);
+    expect(calculateGamePoints(66)).toBe(1);
+  });
+});
+
+describe("declare66", () => {
+  test("awards the declaring player when they have exactly 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 10];
+
+    const nextState = declare66(state, 0);
+
+    expect(nextState.roundResult).toEqual({
+      winner: 0,
+      gamePoints: 2,
+      reason: "declared_66",
+    });
+  });
+
+  test("awards the declaring player when they have more than 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD + 6, 33];
+
+    const nextState = declare66(state, 0);
+
+    expect(nextState.roundResult).toEqual({
+      winner: 0,
+      gamePoints: 1,
+      reason: "declared_66",
+    });
+  });
+
+  test("penalizes a false declaration with 3 game points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD - 1, 10];
+
+    const nextState = declare66(state, 0);
+
+    expect(nextState.roundResult).toEqual({
+      winner: 1,
+      gamePoints: 3,
+      reason: "false_declaration",
+    });
+  });
+
+  test("calculates game points based on opponent score tiers", () => {
+    const baseState = makeState([[], []]);
+
+    baseState.roundScores = [DECLARE_THRESHOLD, 0];
+    expect(declare66(baseState, 0).roundResult).toEqual({
+      winner: 0,
+      gamePoints: 3,
+      reason: "declared_66",
+    });
+
+    baseState.roundScores = [DECLARE_THRESHOLD, 32];
+    expect(declare66(baseState, 0).roundResult).toEqual({
+      winner: 0,
+      gamePoints: 2,
+      reason: "declared_66",
+    });
+
+    baseState.roundScores = [DECLARE_THRESHOLD, 33];
+    expect(declare66(baseState, 0).roundResult).toEqual({
+      winner: 0,
+      gamePoints: 1,
+      reason: "declared_66",
+    });
+  });
+
+  test("awards the second player when they declare with enough points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [12, DECLARE_THRESHOLD + 4];
+
+    const nextState = declare66(state, 1);
+
+    expect(nextState.roundResult).toEqual({
+      winner: 1,
+      gamePoints: 2,
+      reason: "declared_66",
+    });
+  });
+
+  test("penalizes the second player on a false declaration", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [12, DECLARE_THRESHOLD - 2];
+
+    const nextState = declare66(state, 1);
+
+    expect(nextState.roundResult).toEqual({
+      winner: 0,
+      gamePoints: 3,
+      reason: "false_declaration",
+    });
+  });
+
+  test("throws when declaring after the round already ended", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 0];
+
+    const finishedState = declare66(state, 0);
+
+    expect(() => declare66(finishedState, 0)).toThrow("Round already ended.");
   });
 });
 
@@ -144,6 +308,7 @@ function makeState(
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages,
+    roundResult: null,
   };
 }
 
@@ -506,6 +671,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     const nextState = playTrick(
@@ -538,6 +704,7 @@ describe("playTrick", () => {
       ],
       roundScores: [10, 5],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     const nextState = playTrick(
@@ -568,6 +735,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     expect(() =>
@@ -590,6 +758,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     expect(() =>

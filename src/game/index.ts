@@ -1,6 +1,7 @@
 export type { Card, Suit, Rank } from "./cards";
 export {
   CARD_POINTS,
+  DECLARE_THRESHOLD,
   MARRIAGE_POINTS,
   TRUMP_MARRIAGE_POINTS,
   RANK_ORDER,
@@ -10,10 +11,13 @@ export {
   shuffleDeck,
   getMarriagePoints,
 } from "./cards";
-export type { GameState } from "./state";
+export type { GameState, RoundResult } from "./state";
 export {
   dealInitialHands,
   getStockCount,
+  canDeclare66,
+  declare66,
+  calculateGamePoints,
   hasPotentialMarriage,
   canDeclareMarriage,
   findDeclareableMarriages,

@@ -1,5 +1,6 @@
 import {
   CARD_POINTS,
+  DECLARE_THRESHOLD,
   SUITS,
   compareCards,
   compareTrick,
@@ -10,6 +11,24 @@ import {
 
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
+const VALAT_OPPONENT_SCORE = 0;
+const SCHNEIDER_THRESHOLD = 33;
+const VALAT_GAME_POINTS = 3;
+const SCHNEIDER_GAME_POINTS = 2;
+const STANDARD_GAME_POINTS = 1;
+
+export type RoundResult = {
+  winner: 0 | 1;
+  gamePoints: 1 | 2 | 3;
+  /**
+   * Round end condition:
+   * - declared_66: player declares 66 and has at least 66 points.
+   * - false_declaration: player declares 66 but has fewer than 66 points.
+   * - exhausted: stock and hands are empty after the final trick.
+   * - closed_failed: player closed the stock but failed to reach 66.
+   */
+  reason: "declared_66" | "false_declaration" | "exhausted" | "closed_failed";
+};
 
 export type GameState = {
   playerHands: [Card[], Card[]];
@@ -20,6 +39,7 @@ export type GameState = {
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
+  roundResult: RoundResult | null;
 };
 
 export function dealInitialHands(deck: Card[]): GameState {
@@ -54,6 +74,7 @@ export function dealInitialHands(deck: Card[]): GameState {
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
+    roundResult: null,
   };
 }
 
@@ -63,6 +84,56 @@ export function getStockCount(state: GameState): number {
 
 export function isDeckClosedOrExhausted(state: GameState): boolean {
   return state.isClosed || state.stock.length === 0;
+}
+
+export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
+  if (state.roundResult) {
+    return false;
+  }
+  return state.roundScores[playerIndex] >= DECLARE_THRESHOLD;
+}
+
+export function declare66(state: GameState, playerIndex: 0 | 1): GameState {
+  if (state.roundResult) {
+    throw new Error("Round already ended.");
+  }
+
+  const opponentIndex = playerIndex === 0 ? 1 : 0;
+  const playerScore = state.roundScores[playerIndex];
+
+  if (playerScore < DECLARE_THRESHOLD) {
+    const result: RoundResult = {
+      winner: opponentIndex,
+      gamePoints: VALAT_GAME_POINTS,
+      reason: "false_declaration",
+    };
+    return {
+      ...state,
+      roundResult: result,
+    };
+  }
+
+  const result: RoundResult = {
+    winner: playerIndex,
+    gamePoints: calculateGamePoints(state.roundScores[opponentIndex]),
+    reason: "declared_66",
+  };
+  return {
+    ...state,
+    roundResult: result,
+  };
+}
+
+export function calculateGamePoints(opponentScore: number): 1 | 2 | 3 {
+  if (opponentScore === VALAT_OPPONENT_SCORE) {
+    return VALAT_GAME_POINTS;
+  }
+
+  if (opponentScore < SCHNEIDER_THRESHOLD) {
+    return SCHNEIDER_GAME_POINTS;
+  }
+
+  return STANDARD_GAME_POINTS;
 }
 
 export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
