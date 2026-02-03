@@ -26,11 +26,6 @@ The main objective of the game is to be the first one to score 11 win points. Yo
 
 
 
-<!-- BEGIN WIP: STORY-0006 -->
-The player who holds the lowest trump card (the 9) could exchange it for the trump that is turned up during his turn to lead.
-
-The exchange could occur as long as there are more than 2 cards remaining in the talon.
-<!-- END WIP -->
 
 
 --- 
@@ -44,9 +39,6 @@ Santase is not a commonly played card game but it is a lot of fun. This two-play
 Decide who leads by gentleman's agreement or any means you like. This player will lay down a card. The opponent will do then do the same. 
 
 
-<!-- BEGIN WIP: STORY-0006 -->
-Another oddball rule in Santase is that concerns the trump 9. If you have the 9 of the trump suit you can swap it for the overturned trump card in the middle of the table at the start of your turn.
-<!-- END WIP -->
 
 
 
@@ -83,9 +75,6 @@ Playing
 Kings and Queens
 
 Exchanging the 9
-<!-- BEGIN WIP: STORY-0006 -->
-If you have the 9 of the trump suit in your hand you may exchange it for the displayed trump card. But only if you are leading the turn, and only at the start of your turn.
-<!-- END WIP -->
 
 The Run-off
 
