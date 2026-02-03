@@ -44,7 +44,55 @@ export type GameState = {
   roundResult: RoundResult | null;
 };
 
-export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1): GameState {
+export type MatchState = {
+  matchScores: [number, number];
+};
+
+export function initializeMatch(): MatchState {
+  return {
+    matchScores: [0, 0],
+  };
+}
+
+export function applyRoundResult(
+  matchState: MatchState,
+  winnerIndex: 0 | 1,
+  points: 1 | 2 | 3,
+): MatchState {
+  const nextScores: [number, number] = [...matchState.matchScores];
+  nextScores[winnerIndex] += points;
+  return {
+    matchScores: nextScores,
+  };
+}
+
+export function isMatchOver(matchState: MatchState): boolean {
+  return matchState.matchScores[0] >= 11 || matchState.matchScores[1] >= 11;
+}
+
+export function getMatchWinner(matchState: MatchState): 0 | 1 | null {
+  const [playerOneScore, playerTwoScore] = matchState.matchScores;
+
+  if (
+    playerOneScore >= 11 &&
+    playerTwoScore >= 11 &&
+    playerOneScore === playerTwoScore
+  ) {
+    throw new Error("Match state is invalid: tied score at or above 11.");
+  }
+
+  if (playerOneScore >= 11 && playerOneScore > playerTwoScore) {
+    return 0;
+  }
+
+  if (playerTwoScore >= 11 && playerTwoScore > playerOneScore) {
+    return 1;
+  }
+
+  return null;
+}
+
+export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1 = 0): GameState {
   if (deck.length < HAND_SIZE * 2 + 1) {
     throw new Error("Deck does not have enough cards to deal a new round.");
   }
@@ -171,6 +219,23 @@ export function calculateGamePoints(opponentScore: number): 1 | 2 | 3 {
   }
 
   return STANDARD_GAME_POINTS;
+}
+
+export function calculateWinPoints(
+  roundState: GameState,
+  closerIndex?: 0 | 1,
+): 1 | 2 | 3 {
+  if (!roundState.roundResult) {
+    throw new Error("Round result is not available.");
+  }
+
+  const loserIndex = roundState.roundResult.winner === 0 ? 1 : 0;
+
+  if (closerIndex !== undefined && closerIndex === loserIndex) {
+    return VALAT_GAME_POINTS;
+  }
+
+  return calculateGamePoints(roundState.roundScores[loserIndex]);
 }
 
 export function canExchangeTrump9(state: GameState, playerIndex: 0 | 1): boolean {
