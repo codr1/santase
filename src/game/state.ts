@@ -221,6 +221,23 @@ export function calculateGamePoints(opponentScore: number): 1 | 2 | 3 {
   return STANDARD_GAME_POINTS;
 }
 
+export function calculateWinPoints(
+  roundState: GameState,
+  closerIndex?: 0 | 1,
+): 1 | 2 | 3 {
+  if (!roundState.roundResult) {
+    throw new Error("Round result is not available.");
+  }
+
+  const loserIndex = roundState.roundResult.winner === 0 ? 1 : 0;
+
+  if (closerIndex !== undefined && closerIndex === loserIndex) {
+    return VALAT_GAME_POINTS;
+  }
+
+  return calculateGamePoints(roundState.roundScores[loserIndex]);
+}
+
 export function canExchangeTrump9(state: GameState, playerIndex: 0 | 1): boolean {
   if (state.leader !== playerIndex) {
     return false;

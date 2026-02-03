@@ -24,6 +24,7 @@ export {
   canDeclare66,
   declare66,
   calculateGamePoints,
+  calculateWinPoints,
   canExchangeTrump9,
   exchangeTrump9,
   hasPotentialMarriage,

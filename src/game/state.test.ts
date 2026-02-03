@@ -9,6 +9,7 @@ import {
   canDeclareMarriage,
   canDeclare66,
   calculateGamePoints,
+  calculateWinPoints,
   declare66,
   canExchangeTrump9,
   declareMarriage,
@@ -416,6 +417,72 @@ describe("calculateGamePoints", () => {
   test("returns 1 when opponent has 33 or more points", () => {
     expect(calculateGamePoints(33)).toBe(1);
     expect(calculateGamePoints(66)).toBe(1);
+  });
+});
+
+describe("calculateWinPoints", () => {
+  test("throws when round result is missing", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [66, 0];
+
+    expect(() => calculateWinPoints(state)).toThrow(
+      "Round result is not available.",
+    );
+  });
+
+  test.each([
+    {
+      label: "returns 3 when loser has 0 points",
+      roundScores: [66, 0] as const,
+      winner: 0 as const,
+      expected: 3,
+    },
+    {
+      label: "returns 2 when loser has 1-32 points",
+      roundScores: [66, 32] as const,
+      winner: 0 as const,
+      expected: 2,
+    },
+    {
+      label: "returns 1 when loser has 33 or more points",
+      roundScores: [33, 66] as const,
+      winner: 1 as const,
+      expected: 1,
+    },
+  ])("$label", ({ roundScores, winner, expected }) => {
+    const state = makeState([[], []]);
+    state.roundScores = [...roundScores];
+    state.roundResult = {
+      winner,
+      gamePoints: 1,
+      reason: "exhausted",
+    };
+
+    expect(calculateWinPoints(state)).toBe(expected);
+  });
+
+  test("returns 3 when the closer loses regardless of score", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [40, 66];
+    state.roundResult = {
+      winner: 1,
+      gamePoints: 1,
+      reason: "closed_failed",
+    };
+
+    expect(calculateWinPoints(state, 0)).toBe(3);
+  });
+
+  test("uses normal scoring when the closer wins", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [20, 66];
+    state.roundResult = {
+      winner: 1,
+      gamePoints: 2,
+      reason: "exhausted",
+    };
+
+    expect(calculateWinPoints(state, 1)).toBe(2);
   });
 });
 
