@@ -102,6 +102,9 @@ type Card = { suit: Suit; rank: Rank };
 **Functions**:
 - `createDeck()`: Returns ordered 24-card deck
 - `shuffleDeck(cards)`: Returns new array with cryptographically random ordering (Fisher-Yates with `crypto.getRandomValues`)
+- `getMarriagePoints(suit, trumpSuit)`: Returns 40 for trump marriage, 20 otherwise
+- `compareCards(card1, card2)`: Compares two cards by rank only; returns -1 if card1 wins, 1 if card2 wins, 0 for equal
+- `compareTrick(card1, card2, ledSuit, trumpSuit)`: Compares two cards in a trick; trump beats non-trump, led suit beats off-suit; returns 0 if card1 wins, 1 if card2 wins
 
 ### Game State
 
@@ -120,8 +123,8 @@ type GameState = {
 **Functions**:
 - `dealInitialHands(deck)`: Deals 6 cards per player (3, then trump, then 3 more), returns initial GameState with 11 cards in stock
 - `getStockCount(state)`: Returns number of cards remaining in stock
-- `getMarriagePoints(suit, trumpSuit)`: Returns 40 for trump marriage, 20 otherwise
 - `hasPotentialMarriage(hand, suit)`: Returns true if hand contains K and Q of suit
 - `canDeclareMarriage(state, playerIndex, suit)`: Returns true if player can declare marriage (has K+Q and suit not already declared)
 - `findDeclareableMarriages(state, playerIndex)`: Returns array of suits player can declare
 - `declareMarriage(state, playerIndex, suit)`: Returns new GameState with marriage declared and points added
+- `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; returns new GameState

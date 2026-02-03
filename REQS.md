@@ -20,9 +20,6 @@ RULESET 1:
 
 The main objective of the game is to be the first one to score 11 win points. You win points by winning a round. The first player to reach 66 points in a round and to declare it is the winner of the hand.
 
-<!-- BEGIN WIP: STORY-0004 -->
-You acquire points by winning tricks.
-<!-- END WIP -->
 
 
 
@@ -56,10 +53,7 @@ Santase Rules
 Santase is not a commonly played card game but it is a lot of fun. This two-player game, popular in Eastern Europe, is challenging and competitive. Give it a try.
 
 
-Decide who leads by gentleman's agreement or any means you like. This player will lay down a card. The opponent will do then do the same. <!-- BEGIN WIP: STORY-0004 -->
-High card (or any card of trump suit) takes the cards and accumulates and resulting points.
-<!-- END WIP -->
-
+Decide who leads by gentleman's agreement or any means you like. This player will lay down a card. The opponent will do then do the same. 
 
 
 <!-- BEGIN WIP: STORY-0006 -->
@@ -94,9 +88,6 @@ Dealing
 Decide who goes first. After the first deal, the loser of the previous hand deals and the winner lays down the first card.
 
 Playing
-<!-- BEGIN WIP: STORY-0004 -->
-One player plays a card, then the other player plays a card. High card of the same suit takes the cards. Aces are high. Alternatively, any card of the trump suit takes any card of another suit.
-<!-- END WIP -->
 
 
 Kings and Queens
