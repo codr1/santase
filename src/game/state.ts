@@ -21,7 +21,7 @@ export type GameState = {
   declaredMarriages: Suit[];
 };
 
-export function dealInitialHands(deck: Card[]): GameState {
+export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1): GameState {
   if (deck.length < HAND_SIZE * 2 + 1) {
     throw new Error("Deck does not have enough cards to deal a new round.");
   }
@@ -41,6 +41,8 @@ export function dealInitialHands(deck: Card[]): GameState {
   const playerTwoSecond = deck.slice(cursor, cursor + INITIAL_DEAL_SIZE);
   cursor += INITIAL_DEAL_SIZE;
 
+  const leader: 0 | 1 = dealerIndex === 0 ? 1 : 0;
+
   return {
     playerHands: [
       [...playerOneFirst, ...playerOneSecond],
@@ -49,7 +51,7 @@ export function dealInitialHands(deck: Card[]): GameState {
     stock: deck.slice(cursor),
     trumpCard,
     trumpSuit: trumpCard.suit,
-    leader: 0,
+    leader,
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
