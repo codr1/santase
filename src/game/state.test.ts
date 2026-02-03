@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDeck } from "./cards";
-import { dealInitialHands, getStockCount } from "./state";
+import { dealInitialHands, getStockCount, hasPotentialMarriage } from "./state";
 
 describe("dealInitialHands", () => {
   test("deals 6 cards per player", () => {
@@ -31,6 +31,13 @@ describe("dealInitialHands", () => {
 
     expect(state.trumpSuit).toBe(state.trumpCard.suit);
   });
+
+  test("initializes declared marriages as empty", () => {
+    const deck = createDeck();
+    const state = dealInitialHands(deck);
+
+    expect(state.declaredMarriages).toEqual([]);
+  });
 });
 
 describe("getStockCount", () => {
@@ -39,5 +46,41 @@ describe("getStockCount", () => {
     const state = dealInitialHands(deck);
 
     expect(getStockCount(state)).toBe(11);
+  });
+});
+
+describe("hasPotentialMarriage", () => {
+  test("returns true when hand has king and queen of suit", () => {
+    const hand = [
+      { suit: "hearts", rank: "K" },
+      { suit: "hearts", rank: "Q" },
+      { suit: "spades", rank: "A" },
+    ];
+
+    expect(hasPotentialMarriage(hand, "hearts")).toBe(true);
+  });
+
+  test("returns false when missing a required card", () => {
+    const hand = [
+      { suit: "clubs", rank: "K" },
+      { suit: "clubs", rank: "A" },
+      { suit: "spades", rank: "Q" },
+    ];
+
+    expect(hasPotentialMarriage(hand, "clubs")).toBe(false);
+  });
+
+  test("returns false for an empty hand", () => {
+    expect(hasPotentialMarriage([], "hearts")).toBe(false);
+  });
+
+  test("returns false when suit is not present in hand", () => {
+    const hand = [
+      { suit: "spades", rank: "K" },
+      { suit: "spades", rank: "Q" },
+      { suit: "clubs", rank: "A" },
+    ];
+
+    expect(hasPotentialMarriage(hand, "diamonds")).toBe(false);
   });
 });

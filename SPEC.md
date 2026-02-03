@@ -111,10 +111,10 @@ type GameState = {
   trumpSuit: Suit;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
+  declaredMarriages: Suit[];
 };
 ```
 
 **Functions**:
 - `dealInitialHands(deck)`: Deals 6 cards per player (3, then trump, then 3 more), returns initial GameState with 11 cards in stock
 - `getStockCount(state)`: Returns number of cards remaining in stock
-

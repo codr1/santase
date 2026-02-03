@@ -10,6 +10,7 @@ export type GameState = {
   trumpSuit: Suit;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
+  declaredMarriages: Suit[];
 };
 
 export function dealInitialHands(deck: Card[]): GameState {
@@ -42,9 +43,33 @@ export function dealInitialHands(deck: Card[]): GameState {
     trumpSuit: trumpCard.suit,
     wonTricks: [[], []],
     roundScores: [0, 0],
+    declaredMarriages: [],
   };
 }
 
 export function getStockCount(state: GameState): number {
   return state.stock.length;
+}
+
+export function hasPotentialMarriage(hand: Card[], suit: Suit): boolean {
+  let hasKing = false;
+  let hasQueen = false;
+
+  for (const card of hand) {
+    if (card.suit !== suit) {
+      continue;
+    }
+
+    if (card.rank === "K") {
+      hasKing = true;
+    } else if (card.rank === "Q") {
+      hasQueen = true;
+    }
+
+    if (hasKing && hasQueen) {
+      return true;
+    }
+  }
+
+  return false;
 }
