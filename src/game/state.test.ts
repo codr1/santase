@@ -19,6 +19,7 @@ import {
   getValidFollowerCards,
   getStockCount,
   canCloseDeck,
+  closeDeck,
   hasPotentialMarriage,
   isDeckClosedOrExhausted,
   playTrick,
@@ -188,6 +189,110 @@ describe("canCloseDeck", () => {
     };
 
     expect(canCloseDeck(testState)).toBe(false);
+  });
+});
+
+describe("closeDeck", () => {
+  test("successfully closes the deck", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      closedBy: null,
+      trumpCard: { suit: "hearts", rank: "9" },
+    };
+
+    const nextState = closeDeck(testState, 0);
+
+    expect(nextState.isClosed).toBe(true);
+    expect(nextState).not.toBe(testState);
+  });
+
+  test("sets closedBy to the closing player", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      closedBy: null,
+      trumpCard: { suit: "diamonds", rank: "J" },
+    };
+
+    const nextState = closeDeck(testState, 1);
+
+    expect(nextState.closedBy).toBe(1);
+  });
+
+  test("throws when stock has fewer than 3 cards", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 2),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+    };
+
+    expect(() => closeDeck(testState, 0)).toThrow(
+      "Stock must have at least 3 cards to close the deck.",
+    );
+  });
+
+  test("throws when the deck is already closed", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: true,
+      trumpCard: { suit: "hearts", rank: "9" },
+    };
+
+    expect(() => closeDeck(testState, 0)).toThrow("Deck is already closed.");
+  });
+
+  test("throws when the trump card is null", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: null,
+    };
+
+    expect(() => closeDeck(testState, 0)).toThrow(
+      "Trump card is not available to close the deck.",
+    );
+  });
+
+  test("throws when the round already ended", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+      roundResult: {
+        winner: 0,
+        gamePoints: 3,
+        reason: "declared_66",
+      },
+    };
+
+    expect(() => closeDeck(testState, 0)).toThrow("Round already ended.");
+  });
+
+  test("marks deck as closed for isDeckClosedOrExhausted", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+    };
+
+    const nextState = closeDeck(testState, 0);
+
+    expect(isDeckClosedOrExhausted(nextState)).toBe(true);
   });
 });
 

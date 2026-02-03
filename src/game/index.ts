@@ -16,6 +16,7 @@ export {
   dealInitialHands,
   getStockCount,
   canCloseDeck,
+  closeDeck,
   canDeclare66,
   declare66,
   calculateGamePoints,
