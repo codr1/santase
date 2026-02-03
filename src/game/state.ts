@@ -179,3 +179,31 @@ export function playTrick(
     roundScores: nextRoundScores,
   };
 }
+
+export function drawFromStock(state: GameState, winnerIndex: 0 | 1): GameState {
+  if (state.stock.length < 2) {
+    throw new Error("Stock does not have enough cards to draw.");
+  }
+
+  const loserIndex = winnerIndex === 0 ? 1 : 0;
+  const nextStock = [...state.stock];
+  const winnerCard = nextStock.shift();
+  const loserCard = nextStock.shift();
+
+  if (!winnerCard || !loserCard) {
+    throw new Error("Stock does not have enough cards to draw.");
+  }
+
+  const nextHands: [Card[], Card[]] = [
+    [...state.playerHands[0]],
+    [...state.playerHands[1]],
+  ];
+  nextHands[winnerIndex] = [...nextHands[winnerIndex], winnerCard];
+  nextHands[loserIndex] = [...nextHands[loserIndex], loserCard];
+
+  return {
+    ...state,
+    stock: nextStock,
+    playerHands: nextHands,
+  };
+}

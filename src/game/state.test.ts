@@ -4,6 +4,7 @@ import {
   canDeclareMarriage,
   declareMarriage,
   dealInitialHands,
+  drawFromStock,
   findDeclareableMarriages,
   getStockCount,
   hasPotentialMarriage,
@@ -294,6 +295,91 @@ describe("declareMarriage", () => {
     ]);
 
     expect(() => declareMarriage(state, 0, "spades")).toThrow();
+  });
+});
+
+describe("drawFromStock", () => {
+  test("draws top cards for winner and loser", () => {
+    const state: GameState = {
+      playerHands: [
+        [{ suit: "hearts", rank: "A" }],
+        [{ suit: "clubs", rank: "Q" }],
+      ],
+      stock: [
+        { suit: "clubs", rank: "9" },
+        { suit: "spades", rank: "10" },
+        { suit: "diamonds", rank: "K" },
+      ],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    const nextState = drawFromStock(state, 0);
+
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "A" },
+      { suit: "clubs", rank: "9" },
+    ]);
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "clubs", rank: "Q" },
+      { suit: "spades", rank: "10" },
+    ]);
+    expect(nextState.stock).toEqual([{ suit: "diamonds", rank: "K" }]);
+    expect(state.stock).toEqual([
+      { suit: "clubs", rank: "9" },
+      { suit: "spades", rank: "10" },
+      { suit: "diamonds", rank: "K" },
+    ]);
+  });
+
+  test("assigns cards correctly when player one wins", () => {
+    const state: GameState = {
+      playerHands: [
+        [{ suit: "hearts", rank: "J" }],
+        [{ suit: "diamonds", rank: "Q" }],
+      ],
+      stock: [
+        { suit: "spades", rank: "A" },
+        { suit: "clubs", rank: "K" },
+        { suit: "hearts", rank: "9" },
+      ],
+      trumpCard: { suit: "diamonds", rank: "A" },
+      trumpSuit: "diamonds",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    const nextState = drawFromStock(state, 1);
+
+    expect(nextState.playerHands[1]).toEqual([
+      { suit: "diamonds", rank: "Q" },
+      { suit: "spades", rank: "A" },
+    ]);
+    expect(nextState.playerHands[0]).toEqual([
+      { suit: "hearts", rank: "J" },
+      { suit: "clubs", rank: "K" },
+    ]);
+    expect(nextState.stock).toEqual([{ suit: "hearts", rank: "9" }]);
+  });
+
+  test("throws when stock has fewer than two cards", () => {
+    const state: GameState = {
+      playerHands: [[], []],
+      stock: [{ suit: "clubs", rank: "9" }],
+      trumpCard: { suit: "spades", rank: "A" },
+      trumpSuit: "spades",
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+    };
+
+    expect(() => drawFromStock(state, 1)).toThrow(
+      "Stock does not have enough cards to draw.",
+    );
   });
 });
 
