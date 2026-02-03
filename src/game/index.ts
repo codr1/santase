@@ -34,4 +34,6 @@ export {
   getValidFollowerCards,
   playTrick,
   drawFromStock,
+  startMatch,
+  startNewRound,
 } from "./state";
