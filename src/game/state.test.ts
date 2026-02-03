@@ -27,7 +27,7 @@ import {
 describe("dealInitialHands", () => {
   test("deals 6 cards per player", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 1);
 
     expect(state.playerHands[0]).toHaveLength(6);
     expect(state.playerHands[1]).toHaveLength(6);
@@ -35,14 +35,14 @@ describe("dealInitialHands", () => {
 
   test("leaves 11 cards in stock", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 1);
 
     expect(state.stock).toHaveLength(11);
   });
 
   test("uses a trump card from the original deck", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 1);
 
     expect(state.trumpCard).not.toBeNull();
     expect(deck).toContainEqual(state.trumpCard);
@@ -50,7 +50,7 @@ describe("dealInitialHands", () => {
 
   test("sets the trump suit from the trump card", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 1);
 
     expect(state.trumpCard).not.toBeNull();
     expect(state.trumpSuit).toBe(state.trumpCard.suit);
@@ -65,14 +65,21 @@ describe("dealInitialHands", () => {
 
   test("initializes declared marriages as empty", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 1);
 
     expect(state.declaredMarriages).toEqual([]);
   });
 
-  test("sets player 0 as the initial leader", () => {
+  test("sets the leader as the dealer's opponent", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 0);
+
+    expect(state.leader).toBe(1);
+  });
+
+  test("sets the leader as the dealer's opponent when dealer is player 1", () => {
+    const deck = createDeck();
+    const state = dealInitialHands(deck, 1);
 
     expect(state.leader).toBe(0);
   });
@@ -81,7 +88,7 @@ describe("dealInitialHands", () => {
 describe("getStockCount", () => {
   test("returns the stock size", () => {
     const deck = createDeck();
-    const state = dealInitialHands(deck);
+    const state = dealInitialHands(deck, 1);
 
     expect(getStockCount(state)).toBe(11);
   });
