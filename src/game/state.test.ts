@@ -128,6 +128,18 @@ describe("canDeclare66", () => {
 
     expect(canDeclare66(state, 1)).toBe(true);
   });
+
+  test("returns false when the round already ended", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 0];
+    state.roundResult = {
+      winner: 0,
+      gamePoints: 3,
+      reason: "declared_66",
+    };
+
+    expect(canDeclare66(state, 0)).toBe(false);
+  });
 });
 
 describe("calculateGamePoints", () => {
@@ -151,7 +163,9 @@ describe("declare66", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD, 10];
 
-    expect(declare66(state, 0)).toEqual({
+    const nextState = declare66(state, 0);
+
+    expect(nextState.roundResult).toEqual({
       winner: 0,
       gamePoints: 2,
       reason: "declared_66",
@@ -162,7 +176,9 @@ describe("declare66", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD + 6, 33];
 
-    expect(declare66(state, 0)).toEqual({
+    const nextState = declare66(state, 0);
+
+    expect(nextState.roundResult).toEqual({
       winner: 0,
       gamePoints: 1,
       reason: "declared_66",
@@ -173,7 +189,9 @@ describe("declare66", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD - 1, 10];
 
-    expect(declare66(state, 0)).toEqual({
+    const nextState = declare66(state, 0);
+
+    expect(nextState.roundResult).toEqual({
       winner: 1,
       gamePoints: 3,
       reason: "false_declaration",
@@ -184,25 +202,60 @@ describe("declare66", () => {
     const baseState = makeState([[], []]);
 
     baseState.roundScores = [DECLARE_THRESHOLD, 0];
-    expect(declare66(baseState, 0)).toEqual({
+    expect(declare66(baseState, 0).roundResult).toEqual({
       winner: 0,
       gamePoints: 3,
       reason: "declared_66",
     });
 
     baseState.roundScores = [DECLARE_THRESHOLD, 32];
-    expect(declare66(baseState, 0)).toEqual({
+    expect(declare66(baseState, 0).roundResult).toEqual({
       winner: 0,
       gamePoints: 2,
       reason: "declared_66",
     });
 
     baseState.roundScores = [DECLARE_THRESHOLD, 33];
-    expect(declare66(baseState, 0)).toEqual({
+    expect(declare66(baseState, 0).roundResult).toEqual({
       winner: 0,
       gamePoints: 1,
       reason: "declared_66",
     });
+  });
+
+  test("awards the second player when they declare with enough points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [12, DECLARE_THRESHOLD + 4];
+
+    const nextState = declare66(state, 1);
+
+    expect(nextState.roundResult).toEqual({
+      winner: 1,
+      gamePoints: 2,
+      reason: "declared_66",
+    });
+  });
+
+  test("penalizes the second player on a false declaration", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [12, DECLARE_THRESHOLD - 2];
+
+    const nextState = declare66(state, 1);
+
+    expect(nextState.roundResult).toEqual({
+      winner: 0,
+      gamePoints: 3,
+      reason: "false_declaration",
+    });
+  });
+
+  test("throws when declaring after the round already ended", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 0];
+
+    const finishedState = declare66(state, 0);
+
+    expect(() => declare66(finishedState, 0)).toThrow("Round already ended.");
   });
 });
 
@@ -255,6 +308,7 @@ function makeState(
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages,
+    roundResult: null,
   };
 }
 
@@ -617,6 +671,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     const nextState = playTrick(
@@ -649,6 +704,7 @@ describe("playTrick", () => {
       ],
       roundScores: [10, 5],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     const nextState = playTrick(
@@ -679,6 +735,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     expect(() =>
@@ -701,6 +758,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      roundResult: null,
     };
 
     expect(() =>

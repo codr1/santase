@@ -17,17 +17,6 @@ const VALAT_GAME_POINTS = 3;
 const SCHNEIDER_GAME_POINTS = 2;
 const STANDARD_GAME_POINTS = 1;
 
-export type GameState = {
-  playerHands: [Card[], Card[]];
-  stock: Card[];
-  trumpCard: Card | null;
-  trumpSuit: Suit;
-  isClosed: boolean;
-  wonTricks: [Card[], Card[]];
-  roundScores: [number, number];
-  declaredMarriages: Suit[];
-};
-
 export type RoundResult = {
   winner: 0 | 1;
   gamePoints: 1 | 2 | 3;
@@ -39,6 +28,18 @@ export type RoundResult = {
    * - closed_failed: player closed the stock but failed to reach 66.
    */
   reason: "declared_66" | "false_declaration" | "exhausted" | "closed_failed";
+};
+
+export type GameState = {
+  playerHands: [Card[], Card[]];
+  stock: Card[];
+  trumpCard: Card | null;
+  trumpSuit: Suit;
+  isClosed: boolean;
+  wonTricks: [Card[], Card[]];
+  roundScores: [number, number];
+  declaredMarriages: Suit[];
+  roundResult: RoundResult | null;
 };
 
 export function dealInitialHands(deck: Card[]): GameState {
@@ -73,6 +74,7 @@ export function dealInitialHands(deck: Card[]): GameState {
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
+    roundResult: null,
   };
 }
 
@@ -82,26 +84,43 @@ export function getStockCount(state: GameState): number {
 
 export function isDeckClosedOrExhausted(state: GameState): boolean {
   return state.isClosed || state.stock.length === 0;
+}
+
 export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
+  if (state.roundResult) {
+    return false;
+  }
   return state.roundScores[playerIndex] >= DECLARE_THRESHOLD;
 }
 
-export function declare66(state: GameState, playerIndex: 0 | 1): RoundResult {
+export function declare66(state: GameState, playerIndex: 0 | 1): GameState {
+  if (state.roundResult) {
+    throw new Error("Round already ended.");
+  }
+
   const opponentIndex = playerIndex === 0 ? 1 : 0;
   const playerScore = state.roundScores[playerIndex];
 
   if (playerScore < DECLARE_THRESHOLD) {
-    return {
+    const result: RoundResult = {
       winner: opponentIndex,
       gamePoints: VALAT_GAME_POINTS,
       reason: "false_declaration",
     };
+    return {
+      ...state,
+      roundResult: result,
+    };
   }
 
-  return {
+  const result: RoundResult = {
     winner: playerIndex,
     gamePoints: calculateGamePoints(state.roundScores[opponentIndex]),
     reason: "declared_66",
+  };
+  return {
+    ...state,
+    roundResult: result,
   };
 }
 
