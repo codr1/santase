@@ -301,12 +301,12 @@ describe("declareMarriage", () => {
 });
 
 describe("drawFromStock", () => {
-  test("draws top cards for winner and loser", () => {
+  test("draws top cards for winner and loser in order", () => {
     const state: GameState = {
-      playerHands: [
+      ...makeState([
         [{ suit: "hearts", rank: "A" }],
         [{ suit: "clubs", rank: "Q" }],
-      ],
+      ]),
       stock: [
         { suit: "clubs", rank: "9" },
         { suit: "spades", rank: "10" },
@@ -314,9 +314,6 @@ describe("drawFromStock", () => {
       ],
       trumpCard: { suit: "spades", rank: "A" },
       trumpSuit: "spades",
-      wonTricks: [[], []],
-      roundScores: [0, 0],
-      declaredMarriages: [],
     };
 
     const nextState = drawFromStock(state, 0);
@@ -337,18 +334,15 @@ describe("drawFromStock", () => {
     ]);
   });
 
-  test("uses trump card for final draw and clears it", () => {
+  test("uses trump card for the final draw and clears it", () => {
     const state: GameState = {
-      playerHands: [
+      ...makeState([
         [{ suit: "hearts", rank: "A" }],
         [{ suit: "clubs", rank: "Q" }],
-      ],
+      ]),
       stock: [{ suit: "clubs", rank: "9" }],
       trumpCard: { suit: "spades", rank: "A" },
       trumpSuit: "spades",
-      wonTricks: [[], []],
-      roundScores: [0, 0],
-      declaredMarriages: [],
     };
 
     const nextState = drawFromStock(state, 0);
@@ -368,26 +362,23 @@ describe("drawFromStock", () => {
 
   test("uses trump card for final draw when player one wins", () => {
     const state: GameState = {
-      playerHands: [
-        [{ suit: "hearts", rank: "A" }],
-        [{ suit: "clubs", rank: "Q" }],
-      ],
-      stock: [{ suit: "clubs", rank: "9" }],
+      ...makeState([
+        [{ suit: "clubs", rank: "K" }],
+        [{ suit: "hearts", rank: "10" }],
+      ]),
+      stock: [{ suit: "diamonds", rank: "Q" }],
       trumpCard: { suit: "spades", rank: "A" },
       trumpSuit: "spades",
-      wonTricks: [[], []],
-      roundScores: [0, 0],
-      declaredMarriages: [],
     };
 
     const nextState = drawFromStock(state, 1);
 
     expect(nextState.playerHands[1]).toEqual([
-      { suit: "clubs", rank: "Q" },
-      { suit: "clubs", rank: "9" },
+      { suit: "hearts", rank: "10" },
+      { suit: "diamonds", rank: "Q" },
     ]);
     expect(nextState.playerHands[0]).toEqual([
-      { suit: "hearts", rank: "A" },
+      { suit: "clubs", rank: "K" },
       { suit: "spades", rank: "A" },
     ]);
     expect(nextState.stock).toEqual([]);
@@ -395,12 +386,12 @@ describe("drawFromStock", () => {
     expect(nextState.trumpSuit).toBe("spades");
   });
 
-  test("assigns cards correctly when player one wins", () => {
+  test("winner draws first (top card) even when player one wins", () => {
     const state: GameState = {
-      playerHands: [
+      ...makeState([
         [{ suit: "hearts", rank: "J" }],
         [{ suit: "diamonds", rank: "Q" }],
-      ],
+      ]),
       stock: [
         { suit: "spades", rank: "A" },
         { suit: "clubs", rank: "K" },
@@ -408,9 +399,6 @@ describe("drawFromStock", () => {
       ],
       trumpCard: { suit: "diamonds", rank: "A" },
       trumpSuit: "diamonds",
-      wonTricks: [[], []],
-      roundScores: [0, 0],
-      declaredMarriages: [],
     };
 
     const nextState = drawFromStock(state, 1);
@@ -428,17 +416,15 @@ describe("drawFromStock", () => {
 
   test("returns state unchanged when stock is empty", () => {
     const state: GameState = {
-      playerHands: [[], []],
+      ...makeState([[], []]),
       stock: [],
       trumpCard: { suit: "spades", rank: "A" },
       trumpSuit: "spades",
-      wonTricks: [[], []],
-      roundScores: [0, 0],
-      declaredMarriages: [],
     };
 
     const nextState = drawFromStock(state, 1);
 
+    expect(nextState).toBe(state);
     expect(nextState).toEqual(state);
   });
 });
