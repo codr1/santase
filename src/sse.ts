@@ -101,11 +101,18 @@ function removeClient(roomCode: string, client: SseClient): void {
     clientsByRoom.delete(roomCode);
   }
 
-  const { hostConnected } = updateRoomConnections(roomCode);
+  const status = updateRoomConnections(roomCode);
   const room = getRoom(roomCode);
-  if (room && client.role === "host" && !room.guestEverJoined && !hostConnected) {
-    deleteRoom(roomCode);
-    clientsByRoom.delete(roomCode);
+  if (room) {
+    if (client.role === "guest" && !status.guestConnected && status.hostConnected) {
+      broadcast(roomCode, "disconnected", "guest");
+    }
+    broadcast(roomCode, "status", JSON.stringify(status));
+
+    if (client.role === "host" && !room.guestEverJoined && !status.hostConnected) {
+      deleteRoom(roomCode);
+      clientsByRoom.delete(roomCode);
+    }
   }
 }
 
@@ -129,17 +136,16 @@ export function handleSse(request: Request, roomCode: string): Response {
       const clients = ensureRoomClients(roomCode);
       clients.add(client);
 
-      if (role === "host") {
-        room.hostConnected = true;
-      } else {
+      if (role === "guest") {
         const isFirstGuest = !room.guestEverJoined;
-        room.guestConnected = true;
         room.guestEverJoined = true;
         if (isFirstGuest) {
           broadcast(roomCode, "connected", "guest");
         }
       }
 
+      const status = updateRoomConnections(roomCode);
+      broadcast(roomCode, "status", JSON.stringify(status));
       touchRoom(roomCode);
       client.heartbeat = setInterval(() => {
         if (client) {
