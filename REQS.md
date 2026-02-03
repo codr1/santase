@@ -43,9 +43,6 @@ Decide who leads by gentleman's agreement or any means you like. This player wil
 
 
 
-<!-- BEGIN WIP: STORY-0010 -->
-Here's one more complicating rule. At any point in the game, while the stock pile still has cards in inventory, a player may close the deck. That means players enter the final phase of the game as if the stock pile was exhausted.
-<!-- END WIP -->
 
 
 <!-- BEGIN WIP: STORY-0011 -->
@@ -81,9 +78,6 @@ The Run-off
 Card Scoring
 
 Closing the Deck
-<!-- BEGIN WIP: STORY-0010 -->
-At any point in the game, provided there are at least 3 cards remaining in the deck plus the displayed trump card, a player may close the deck. To do this, turn over the displayed trump card. You must do this at the start of your turn and you must be leading (laying down first). Then the game proceeds as in the "run-off".
-<!-- END WIP -->
 
 Game Scoring
 

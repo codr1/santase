@@ -118,6 +118,7 @@ type GameState = {
   trumpSuit: Suit;
   isClosed: boolean;
   leader: 0 | 1;
+  closedBy: 0 | 1 | null;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
@@ -134,6 +135,8 @@ type RoundResult = {
 **Functions**:
 - `dealInitialHands(deck, dealerIndex)`: Deals 6 cards per player (3, then trump, then 3 more), returns initial GameState with 11 cards in stock; sets `leader` to dealer's opponent
 - `getStockCount(state)`: Returns number of cards remaining in stock
+- `canCloseDeck(state)`: Returns true when stock has 3+ cards, deck is not already closed, trump card exists, and round hasn't ended
+- `closeDeck(state, playerIndex)`: Sets `isClosed` to true and `closedBy` to the closing player; throws when conditions not met
 - `canDeclare66(state, playerIndex)`: Returns true if player has ≥66 points and round hasn't ended
 - `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 3 game points
 - `calculateGamePoints(opponentScore)`: Returns game points based on opponent score: 3 if 0, 2 if 1-32, 1 if ≥33
