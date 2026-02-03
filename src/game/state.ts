@@ -86,6 +86,25 @@ export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
   return state.roundScores[playerIndex] >= DECLARE_THRESHOLD;
 }
 
+export function declare66(state: GameState, playerIndex: 0 | 1): RoundResult {
+  const opponentIndex = playerIndex === 0 ? 1 : 0;
+  const playerScore = state.roundScores[playerIndex];
+
+  if (playerScore < DECLARE_THRESHOLD) {
+    return {
+      winner: opponentIndex,
+      gamePoints: VALAT_GAME_POINTS,
+      reason: "false_declaration",
+    };
+  }
+
+  return {
+    winner: playerIndex,
+    gamePoints: calculateGamePoints(state.roundScores[opponentIndex]),
+    reason: "declared_66",
+  };
+}
+
 export function calculateGamePoints(opponentScore: number): 1 | 2 | 3 {
   if (opponentScore === VALAT_OPPONENT_SCORE) {
     return VALAT_GAME_POINTS;

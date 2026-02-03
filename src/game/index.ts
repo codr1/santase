@@ -16,6 +16,7 @@ export {
   dealInitialHands,
   getStockCount,
   canDeclare66,
+  declare66,
   calculateGamePoints,
   hasPotentialMarriage,
   canDeclareMarriage,

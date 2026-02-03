@@ -9,6 +9,7 @@ import {
   canDeclareMarriage,
   canDeclare66,
   calculateGamePoints,
+  declare66,
   declareMarriage,
   dealInitialHands,
   drawFromStock,
@@ -142,6 +143,66 @@ describe("calculateGamePoints", () => {
   test("returns 1 when opponent has 33 or more points", () => {
     expect(calculateGamePoints(33)).toBe(1);
     expect(calculateGamePoints(66)).toBe(1);
+  });
+});
+
+describe("declare66", () => {
+  test("awards the declaring player when they have exactly 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD, 10];
+
+    expect(declare66(state, 0)).toEqual({
+      winner: 0,
+      gamePoints: 2,
+      reason: "declared_66",
+    });
+  });
+
+  test("awards the declaring player when they have more than 66 points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD + 6, 33];
+
+    expect(declare66(state, 0)).toEqual({
+      winner: 0,
+      gamePoints: 1,
+      reason: "declared_66",
+    });
+  });
+
+  test("penalizes a false declaration with 3 game points", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD - 1, 10];
+
+    expect(declare66(state, 0)).toEqual({
+      winner: 1,
+      gamePoints: 3,
+      reason: "false_declaration",
+    });
+  });
+
+  test("calculates game points based on opponent score tiers", () => {
+    const baseState = makeState([[], []]);
+
+    baseState.roundScores = [DECLARE_THRESHOLD, 0];
+    expect(declare66(baseState, 0)).toEqual({
+      winner: 0,
+      gamePoints: 3,
+      reason: "declared_66",
+    });
+
+    baseState.roundScores = [DECLARE_THRESHOLD, 32];
+    expect(declare66(baseState, 0)).toEqual({
+      winner: 0,
+      gamePoints: 2,
+      reason: "declared_66",
+    });
+
+    baseState.roundScores = [DECLARE_THRESHOLD, 33];
+    expect(declare66(baseState, 0)).toEqual({
+      winner: 0,
+      gamePoints: 1,
+      reason: "declared_66",
+    });
   });
 });
 
