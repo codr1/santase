@@ -139,6 +139,32 @@ function removeCardAt(hand: Card[], index: number): Card[] {
   return [...hand.slice(0, index), ...hand.slice(index + 1)];
 }
 
+export function exchangeTrump9(state: GameState, playerIndex: 0 | 1): GameState {
+  if (!canExchangeTrump9(state, playerIndex)) {
+    throw new Error("Player cannot exchange the trump 9.");
+  }
+
+  const playerHand = state.playerHands[playerIndex];
+  const trump9Index = playerHand.findIndex(
+    (card) => card.rank === "9" && card.suit === state.trumpSuit,
+  );
+
+  if (trump9Index < 0) {
+    throw new Error("Trump 9 not found in hand.");
+  }
+
+  const trump9Card = playerHand[trump9Index];
+  const nextHand = [...removeCardAt(playerHand, trump9Index), state.trumpCard];
+  const nextHands: [Card[], Card[]] =
+    playerIndex === 0 ? [nextHand, state.playerHands[1]] : [state.playerHands[0], nextHand];
+
+  return {
+    ...state,
+    playerHands: nextHands,
+    trumpCard: trump9Card,
+  };
+}
+
 export function playTrick(
   state: GameState,
   leaderIndex: 0 | 1,
