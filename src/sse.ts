@@ -1,4 +1,5 @@
 import { deleteRoom, getRoom, touchRoom } from "./rooms";
+import { buttonBaseClasses } from "./templates/styles";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 
@@ -130,7 +131,7 @@ function startGameMarkup(
   }
   const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
   const action = `/rooms/${encodeURIComponent(roomCode)}/start${tokenQuery}`;
-  return `<button type="button" hx-post="${action}" hx-swap="none" aria-label="Start game">Start Game</button>`;
+  return `<button type="button" hx-post="${action}" hx-swap="none" aria-label="Start game" class="${buttonBaseClasses} w-full bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg focus:ring-emerald-500">Start Game</button>`;
 }
 
 function removeClient(roomCode: string, client: SseClient): void {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createRoom, deleteRoom } from "./rooms";
 import { handleSse, startGame } from "./sse";
+import { buttonBaseClasses } from "./templates/styles";
 
 type SseEvent = {
   event: string;
@@ -105,7 +106,7 @@ describe("SSE status broadcasting", () => {
     expect(connectedEvent?.data).toBe("guest");
     expect(statusAfterGuest?.data).toBe("<span>Opponent connected</span>");
     expect(startGameAfterGuest?.data).toBe(
-      `<button type="button" hx-post="/rooms/${room.code}/start?hostToken=${room.hostToken}" hx-swap="none" aria-label="Start game">Start Game</button>`,
+      `<button type="button" hx-post="/rooms/${room.code}/start?hostToken=${room.hostToken}" hx-swap="none" aria-label="Start game" class="${buttonBaseClasses} w-full bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg focus:ring-emerald-500">Start Game</button>`,
     );
 
     guestAbort.abort();
