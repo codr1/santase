@@ -254,6 +254,20 @@ describe("declareMarriage", () => {
     expect(nextState.roundScores[0]).toBe(MARRIAGE_POINTS);
   });
 
+  test("awards points to the declaring second player", () => {
+    const state = makeState([
+      [],
+      [
+        { suit: "clubs", rank: "K" },
+        { suit: "clubs", rank: "Q" },
+      ],
+    ]);
+
+    const nextState = declareMarriage(state, 1, "clubs");
+
+    expect(nextState.roundScores[1]).toBe(MARRIAGE_POINTS);
+  });
+
   test("throws when declaring a suit already declared", () => {
     const state = makeState(
       [
