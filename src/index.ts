@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join, normalize, sep } from "node:path";
 import { renderHomePage } from "./templates/home";
 import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
@@ -7,6 +9,7 @@ import { handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
 
 const DEFAULT_PORT = 3000;
+const PUBLIC_ROOT = normalize(decodeURIComponent(new URL("../public", import.meta.url).pathname));
 
 export function resolvePort(envPort: string | undefined): number {
   const parsedPort = envPort ? Number.parseInt(envPort, 10) : NaN;
@@ -87,6 +90,19 @@ function resolveViewerIndex(request: Request, room: Room): 0 | 1 {
 export function handleRequest(request: Request): Response {
   const url = new URL(request.url);
   const path = url.pathname;
+
+  if (request.method === "GET" && path.startsWith("/public/")) {
+    const relativePath = decodeURIComponent(path.slice("/public/".length));
+    if (!relativePath) {
+      return new Response(escapeHtml("Not Found"), { status: 404 });
+    }
+    const resolvedPath = normalize(join(PUBLIC_ROOT, relativePath));
+    const publicRootWithSep = PUBLIC_ROOT.endsWith(sep) ? PUBLIC_ROOT : `${PUBLIC_ROOT}${sep}`;
+    if (!resolvedPath.startsWith(publicRootWithSep) || !existsSync(resolvedPath)) {
+      return new Response(escapeHtml("Not Found"), { status: 404 });
+    }
+    return new Response(Bun.file(resolvedPath));
+  }
 
   if (request.method === "GET" && path === "/") {
     return htmlResponse(renderHomePage());

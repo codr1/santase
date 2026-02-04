@@ -1,6 +1,6 @@
 import type { Card, Rank, Suit } from "../game/cards";
 
-const SVG_CARDS_CDN = "https://cdn.jsdelivr.net/npm/svg-cards@4.0.0/svg-cards.svg";
+const SVG_CARDS_CDN = "/public/svg-cards.svg";
 const CARD_BACK_SPRITE_ID = "back";
 const CARD_BACK_URL = `${SVG_CARDS_CDN}#${CARD_BACK_SPRITE_ID}`;
 
