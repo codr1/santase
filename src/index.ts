@@ -163,11 +163,13 @@ export function handleRequest(request: Request): Response {
         );
       }
       touchRoom(normalizedCode);
+      const viewerIndex = resolveViewerIndex(request, resolution.room);
       return htmlResponse(
         renderGamePage({
           code: resolution.room.code,
           matchState: resolution.room.matchState,
-          viewerIndex: resolveViewerIndex(request, resolution.room),
+          viewerIndex,
+          hostToken: viewerIndex === resolution.room.hostPlayerIndex ? resolution.room.hostToken : undefined,
         }),
       );
     }

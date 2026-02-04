@@ -8,6 +8,7 @@ type GameOptions = {
   code: string;
   matchState: MatchState;
   viewerIndex: 0 | 1;
+  hostToken?: string;
 };
 
 const SUIT_SYMBOLS: Record<Suit, { symbolHtml: string; label: string; colorClass: string }> = {
@@ -86,8 +87,11 @@ function renderEmptyCardSlot(): string {
   </div>`;
 }
 
-export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): string {
+export function renderGamePage({ code, matchState, viewerIndex, hostToken }: GameOptions): string {
   const safeCode = escapeHtml(code);
+  const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
+  const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
+  const safeSseUrl = escapeHtml(sseUrl);
   const {
     game: {
       playerHands,
@@ -123,6 +127,7 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
       : "";
   const playerWonPileMarkup =
     playerWonCards > 0 ? renderCardSvg(getCardBackUrl(), "Your won pile", "opacity-80") : "";
+  const statusMarkup = `<span>Connecting...</span>`;
   const body = `
     <style>
       .player-hand {
@@ -146,7 +151,11 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
         z-index: var(--fan-index, 0);
       }
     </style>
-    <main class="min-h-screen bg-emerald-950 px-4 py-6 text-emerald-50 sm:px-8">
+    <main
+      hx-ext="sse"
+      sse-connect="${safeSseUrl}"
+      class="min-h-screen bg-emerald-950 px-4 py-6 text-emerald-50 sm:px-8"
+    >
       <div class="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Game Starting</h1>
         <header class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-900/60 px-4 py-3 shadow-lg shadow-black/20 ring-1 ring-emerald-400/20">
@@ -154,6 +163,14 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
             <span class="text-xs uppercase tracking-[0.35em] text-emerald-200/80">Room</span>
             <span aria-label="Room code" class="text-2xl font-semibold tracking-[0.2em]">${safeCode}</span>
           </div>
+          <p
+            id="game-status"
+            sse-swap="status"
+            aria-live="polite"
+            class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-200/70"
+          >
+            ${statusMarkup}
+          </p>
           <div class="flex items-center gap-3 rounded-xl bg-emerald-950/70 px-3 py-2 text-sm">
             <span class="text-emerald-200/80">Trump</span>
             <span class="text-lg font-semibold ${suitMeta.colorClass}">
@@ -182,12 +199,12 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
                   <span class="text-emerald-200/70">Cards</span>
                   <span class="text-lg font-semibold">${opponentWonCards}</span>
                 </div>
-                <div class="flex items-center">
+                <div class="flex items-center" data-opponent-won-pile="true">
                   ${opponentWonPileMarkup}
                 </div>
               </div>
             </div>
-            <div class="flex flex-wrap items-center justify-center gap-2">
+            <div class="flex flex-wrap items-center justify-center gap-2" data-opponent-hand="true">
               ${renderFaceDownCards(opponentHandCount)}
             </div>
           </div>
@@ -219,7 +236,7 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
 
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
               <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Current trick</p>
-              <div class="mt-4 flex items-center justify-center gap-4">
+              <div class="mt-4 flex items-center justify-center gap-4" data-trick-area="true">
                 ${renderEmptyCardSlot()}
                 ${renderEmptyCardSlot()}
               </div>
@@ -235,7 +252,7 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
                 </div>
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Stock</span>
-                  <div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20">
+                  <div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" data-stock-pile="true">
                     ${stockPileMarkup}
                   </div>
                   <span class="text-sm font-semibold">${stockCount} cards</span>
@@ -259,7 +276,7 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
                   <span class="text-emerald-200/70">Cards</span>
                   <span class="text-lg font-semibold">${playerWonCards}</span>
                 </div>
-                <div class="flex items-center">
+                <div class="flex items-center" data-player-won-pile="true">
                   ${playerWonPileMarkup}
                 </div>
               </div>
@@ -273,6 +290,7 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
             </div>
           </div>
         </section>
+        <div id="game-state-listener" sse-swap="game-state" class="hidden"></div>
 
         <p class="text-center text-sm text-emerald-200/70">
           <a href="/" class="hover:underline">Back to home</a>
@@ -317,6 +335,21 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
             window.gsap.set(cards, { y: getWaitingOffset() });
           });
         }
+      });
+      document.body.addEventListener("htmx:sseMessage", (event) => {
+        const detail = event.detail || {};
+        if (detail.type !== "game-state") return;
+        const payload = detail.data || "{}";
+        let parsedState = null;
+        try {
+          parsedState = JSON.parse(payload);
+        } catch {
+          console.warn("game-state payload was not valid JSON");
+          return;
+        }
+
+        // Placeholder: log updates until state diffing/animations are implemented.
+        console.log("Received game-state update", parsedState);
       });
     </script>
   `;

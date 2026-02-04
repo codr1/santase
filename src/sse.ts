@@ -1,4 +1,5 @@
 import { deleteRoom, getRoom, touchRoom } from "./rooms";
+import type { MatchState } from "./game/state";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 
@@ -58,6 +59,10 @@ function startGame(roomCode: string): void {
   const destination = `/rooms/${encodeURIComponent(roomCode)}/game`;
   console.log(`Game starting: ${roomCode}`);
   broadcast(roomCode, "game-start", destination);
+}
+
+export function broadcastGameState(roomCode: string, matchState: MatchState): void {
+  broadcast(roomCode, "game-state", JSON.stringify(matchState));
 }
 
 function sendHeartbeat(roomCode: string, client: SseClient): void {
