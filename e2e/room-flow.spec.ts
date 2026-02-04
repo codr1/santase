@@ -79,4 +79,29 @@ if (!isBun) {
       await guestContext.close();
     }
   });
+
+  test("host can start game when guest connected", async ({ browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+
+    try {
+      const hostPage = await hostContext.newPage();
+      const roomCode = await createRoom(hostPage);
+
+      const guestPage = await guestContext.newPage();
+      await joinRoom(guestPage, roomCode);
+
+      const startGameButton = hostPage.getByRole("button", { name: /start game/i });
+      await expect(startGameButton).toBeVisible();
+
+      await Promise.all([
+        hostPage.waitForURL(new RegExp(`/rooms/${roomCode}/game$`)),
+        guestPage.waitForURL(new RegExp(`/rooms/${roomCode}/game$`)),
+        startGameButton.click(),
+      ]);
+    } finally {
+      await hostContext.close();
+      await guestContext.close();
+    }
+  });
 }
