@@ -30,14 +30,45 @@ function renderCardSvg(url: string, label?: string, extraClasses = ""): string {
 }
 
 function renderFaceUpCards(cards: Card[]): string {
+  const fanLayout = getFanLayout(cards.length);
   return cards
-    .map((card) => {
+    .map((card, index) => {
       const label = `${card.rank} of ${card.suit}`;
-      return `<div class="rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20">
+      const fanX = fanLayout.positions[index] ?? 50;
+      const fanRot = fanLayout.rotations[index] ?? 0;
+      return `<div
+        class="player-card rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20"
+        data-player-card="true"
+        data-card-index="${index}"
+        data-fan-x="${fanX}"
+        data-fan-rot="${fanRot}"
+        style="--fan-x:${fanX}%; --fan-rot:${fanRot}deg; --fan-index:${index};"
+      >
         ${renderCardSvg(getCardImageUrl(card), label, "drop-shadow")}
       </div>`;
     })
     .join("");
+}
+
+function getFanLayout(count: number): { positions: number[]; rotations: number[] } {
+  if (count <= 1) {
+    return { positions: [50], rotations: [0] };
+  }
+
+  const positionStart = 14;
+  const positionEnd = 86;
+  const rotationStart = -18;
+  const rotationEnd = 18;
+  const positionStep = (positionEnd - positionStart) / (count - 1);
+  const rotationStep = (rotationEnd - rotationStart) / (count - 1);
+  const positions = Array.from({ length: count }, (_, index) =>
+    Number((positionStart + positionStep * index).toFixed(2)),
+  );
+  const rotations = Array.from({ length: count }, (_, index) =>
+    Number((rotationStart + rotationStep * index).toFixed(2)),
+  );
+
+  return { positions, rotations };
 }
 
 function renderFaceDownCards(count: number): string {
@@ -92,6 +123,25 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
   const playerWonPileMarkup =
     playerWonCards > 0 ? renderCardSvg(getCardBackUrl(), "Your won pile", "opacity-80") : "";
   const body = `
+    <style>
+      .player-hand {
+        position: relative;
+        height: 8rem;
+      }
+      @media (min-width: 640px) {
+        .player-hand {
+          height: 9rem;
+        }
+      }
+      .player-card {
+        position: absolute;
+        bottom: 0;
+        left: var(--fan-x, 50%);
+        transform: translateX(-50%) rotate(var(--fan-rot, 0deg));
+        transform-origin: 50% 120%;
+        z-index: var(--fan-index, 0);
+      }
+    </style>
     <main class="min-h-screen bg-emerald-950 px-4 py-6 text-emerald-50 sm:px-8">
       <div class="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Game Starting</h1>
@@ -207,7 +257,7 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
                 </div>
               </div>
             </div>
-            <div class="flex flex-wrap items-center justify-center gap-2">
+            <div class="player-hand mx-auto w-full max-w-xl">
               ${renderFaceUpCards(playerHand)}
             </div>
           </div>
@@ -218,6 +268,32 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
         </p>
       </div>
     </main>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        if (!window.gsap) {
+          return;
+        }
+        const cards = Array.from(document.querySelectorAll("[data-player-card]"));
+        cards.forEach((card, index) => {
+          const fanX = Number(card.dataset.fanX ?? "50");
+          const fanRot = Number(card.dataset.fanRot ?? "0");
+          window.gsap.fromTo(
+            card,
+            { left: "50%", xPercent: -50, y: 36, opacity: 0, rotation: 0 },
+            {
+              left: fanX + "%",
+              xPercent: -50,
+              y: 0,
+              opacity: 1,
+              rotation: fanRot,
+              duration: 0.6,
+              ease: "power3.out",
+              delay: index * 0.08,
+            },
+          );
+        });
+      });
+    </script>
   `;
 
   return renderLayout({ title: "Game", body });
