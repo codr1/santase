@@ -41,6 +41,7 @@ function renderFaceUpCards(cards: Card[]): string {
         class="player-card rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20"
         data-player-card="true"
         data-card-index="${index}"
+        data-card-key="${card.rank}-${card.suit}"
         data-fan-x="${fanX}"
         data-fan-rot="${fanRot}"
         style="--fan-x:${fanX}%; --fan-rot:${fanRot}deg; --fan-index:${index};"
@@ -75,7 +76,7 @@ function getFanLayout(count: number): { positions: number[]; rotations: number[]
 function renderFaceDownCards(count: number): string {
   const backUrl = getCardBackUrl();
   return Array.from({ length: count }, () => {
-    return `<div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20">
+    return `<div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" data-opponent-card="true">
       ${renderCardSvg(backUrl, "Card back", "opacity-90")}
     </div>`;
   }).join("");
@@ -248,14 +249,14 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               <div class="mt-4 flex items-center justify-center gap-6">
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Trump card</span>
-                  ${trumpCardMarkup}
+                  <div data-trump-card="true">${trumpCardMarkup}</div>
                 </div>
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Stock</span>
                   <div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" data-stock-pile="true">
                     ${stockPileMarkup}
                   </div>
-                  <span class="text-sm font-semibold">${stockCount} cards</span>
+                  <span class="text-sm font-semibold" data-stock-count="true">${stockCount} cards</span>
                 </div>
               </div>
             </div>
@@ -298,6 +299,271 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       </div>
     </main>
     <script>
+      const viewerIndex = ${playerIndex};
+      const opponentIndex = ${opponentIndex};
+      const initialState = ${JSON.stringify(matchState)};
+      let currentState = initialState;
+      const svgCardsCdn = "/public/svg-cards.svg";
+      const cardBackUrl = svgCardsCdn + "#back";
+      const suitIds = {
+        hearts: "heart",
+        diamonds: "diamond",
+        clubs: "club",
+        spades: "spade",
+      };
+      const rankIds = {
+        "9": "9",
+        "10": "10",
+        J: "jack",
+        Q: "queen",
+        K: "king",
+        A: "1",
+      };
+
+      const cardKey = (card) => card.rank + "-" + card.suit;
+      const getCardImageUrl = (card) =>
+        svgCardsCdn + "#" + suitIds[card.suit] + "_" + rankIds[card.rank];
+      const renderCardSvg = (url, label, extraClasses = "") => {
+        const aria = label ? 'role="img" aria-label="' + label + '"' : 'aria-hidden="true"';
+        const classes = ("h-24 w-16 sm:h-28 sm:w-20 " + extraClasses).trim();
+        return '<svg ' + aria + ' class="' + classes + '"><use href="' + url + '"></use></svg>';
+      };
+      const renderEmptyCardSlot = () =>
+        '<div class="flex h-24 w-16 items-center justify-center rounded-xl border border-dashed border-emerald-200/50 sm:h-28 sm:w-20">' +
+        '<span class="text-xs text-emerald-200/70">Empty</span>' +
+        "</div>";
+      const getFanLayout = (count) => {
+        if (count <= 1) {
+          return { positions: [50], rotations: [0] };
+        }
+        const positionStart = 14;
+        const positionEnd = 86;
+        const rotationStart = -18;
+        const rotationEnd = 18;
+        const positionStep = (positionEnd - positionStart) / (count - 1);
+        const rotationStep = (rotationEnd - rotationStart) / (count - 1);
+        const positions = Array.from({ length: count }, (_, index) =>
+          Number((positionStart + positionStep * index).toFixed(2)),
+        );
+        const rotations = Array.from({ length: count }, (_, index) =>
+          Number((rotationStart + rotationStep * index).toFixed(2)),
+        );
+        return { positions, rotations };
+      };
+      const createPlayerCardElement = (card, index, fanX, fanRot) => {
+        const label = card.rank + " of " + card.suit;
+        const wrapper = document.createElement("div");
+        wrapper.className = "player-card rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20";
+        wrapper.dataset.playerCard = "true";
+        wrapper.dataset.cardIndex = String(index);
+        wrapper.dataset.cardKey = cardKey(card);
+        wrapper.dataset.fanX = String(fanX);
+        wrapper.dataset.fanRot = String(fanRot);
+        wrapper.style.setProperty("--fan-x", fanX + "%");
+        wrapper.style.setProperty("--fan-rot", fanRot + "deg");
+        wrapper.style.setProperty("--fan-index", String(index));
+        wrapper.innerHTML = renderCardSvg(getCardImageUrl(card), label, "drop-shadow");
+        return wrapper;
+      };
+      const createOpponentCardElement = () => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20";
+        wrapper.dataset.opponentCard = "true";
+        wrapper.innerHTML = renderCardSvg(cardBackUrl, "Card back", "opacity-90");
+        return wrapper;
+      };
+      const areCardsEqual = (left, right) =>
+        Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
+      const areHandsEqual = (left, right) => {
+        if (!left || !right || left.length !== right.length) {
+          return false;
+        }
+        return left.every((card, index) => areCardsEqual(card, right[index]));
+      };
+      const animateNewCards = (cards, isWaiting) => {
+        if (!window.gsap || cards.length === 0) {
+          return;
+        }
+        const waitingOffset = Math.round(window.innerHeight * 0.33);
+        const waitingFilter = "grayscale(0.45)";
+        const waitingOpacity = 0.65;
+        cards.forEach((card, index) => {
+          const fanX = Number(card.dataset.fanX ?? "50");
+          const fanRot = Number(card.dataset.fanRot ?? "0");
+          window.gsap.fromTo(
+            card,
+            { left: "50%", xPercent: -50, y: 36, opacity: 0, rotation: 0, filter: "grayscale(0)" },
+            {
+              left: fanX + "%",
+              xPercent: -50,
+              y: isWaiting ? waitingOffset : 0,
+              opacity: isWaiting ? waitingOpacity : 1,
+              pointerEvents: isWaiting ? "none" : "auto",
+              filter: isWaiting ? waitingFilter : "grayscale(0)",
+              rotation: fanRot,
+              duration: 0.6,
+              ease: "power3.out",
+              delay: index * 0.08,
+            },
+          );
+        });
+      };
+      const animateOpponentCards = (cards) => {
+        if (!window.gsap || cards.length === 0) {
+          return;
+        }
+        cards.forEach((card) => {
+          window.gsap.fromTo(card, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35 });
+        });
+      };
+      const updateWaitingState = (nextLeader) => {
+        const hand = document.querySelector("[data-player-hand]");
+        const board = document.querySelector(".game-board");
+        if (!hand) {
+          return;
+        }
+        const isWaiting = nextLeader !== viewerIndex;
+        const waitingValue = isWaiting ? "true" : "false";
+        hand.dataset.waiting = waitingValue;
+        if (board) {
+          board.dataset.waiting = waitingValue;
+        }
+      };
+      const updatePlayerHand = (nextHand, nextLeader) => {
+        const hand = document.querySelector("[data-player-hand]");
+        if (!hand) {
+          return;
+        }
+        const nextKeys = new Set(nextHand.map(cardKey));
+        const existingCards = Array.from(hand.querySelectorAll("[data-player-card]"));
+        const existingByKey = new Map();
+        existingCards.forEach((card) => {
+          if (card.dataset.cardKey) {
+            existingByKey.set(card.dataset.cardKey, card);
+          }
+        });
+        existingCards.forEach((card) => {
+          const key = card.dataset.cardKey;
+          if (!key || !nextKeys.has(key)) {
+            card.remove();
+          }
+        });
+        const fanLayout = getFanLayout(nextHand.length);
+        const newCards = [];
+        nextHand.forEach((card, index) => {
+          const key = cardKey(card);
+          const fanX = fanLayout.positions[index] ?? 50;
+          const fanRot = fanLayout.rotations[index] ?? 0;
+          let cardEl = existingByKey.get(key);
+          if (!cardEl) {
+            cardEl = createPlayerCardElement(card, index, fanX, fanRot);
+            newCards.push(cardEl);
+          } else {
+            cardEl.dataset.cardIndex = String(index);
+            cardEl.dataset.fanX = String(fanX);
+            cardEl.dataset.fanRot = String(fanRot);
+            cardEl.style.setProperty("--fan-x", fanX + "%");
+            cardEl.style.setProperty("--fan-rot", fanRot + "deg");
+            cardEl.style.setProperty("--fan-index", String(index));
+          }
+          hand.appendChild(cardEl);
+        });
+        const isWaiting = nextLeader !== viewerIndex;
+        updateWaitingState(nextLeader);
+        animateNewCards(newCards, isWaiting);
+      };
+      const updateOpponentHand = (nextCount) => {
+        const hand = document.querySelector("[data-opponent-hand]");
+        if (!hand) {
+          return;
+        }
+        const currentCount = hand.querySelectorAll("[data-opponent-card]").length;
+        if (currentCount === nextCount) {
+          return;
+        }
+        if (nextCount > currentCount) {
+          const newCards = [];
+          for (let index = currentCount; index < nextCount; index += 1) {
+            const cardEl = createOpponentCardElement();
+            hand.appendChild(cardEl);
+            newCards.push(cardEl);
+          }
+          animateOpponentCards(newCards);
+        } else {
+          const cards = Array.from(hand.querySelectorAll("[data-opponent-card]"));
+          for (let index = cards.length - 1; index >= nextCount; index -= 1) {
+            cards[index]?.remove();
+          }
+        }
+      };
+      const updateTrumpCard = (nextTrumpCard) => {
+        const trumpContainer = document.querySelector("[data-trump-card]");
+        if (!trumpContainer) {
+          return;
+        }
+        const nextKey = nextTrumpCard ? cardKey(nextTrumpCard) : "none";
+        if (trumpContainer.dataset.trumpKey === nextKey) {
+          return;
+        }
+        trumpContainer.dataset.trumpKey = nextKey;
+        if (!nextTrumpCard) {
+          trumpContainer.innerHTML = renderEmptyCardSlot();
+          return;
+        }
+        const label = nextTrumpCard.rank + " of " + nextTrumpCard.suit;
+        trumpContainer.innerHTML = renderCardSvg(getCardImageUrl(nextTrumpCard), label, "drop-shadow");
+      };
+      const updateStockPile = (nextCount) => {
+        const stockPile = document.querySelector("[data-stock-pile]");
+        const stockCount = document.querySelector("[data-stock-count]");
+        if (!stockPile) {
+          return;
+        }
+        const currentCount = Number(stockPile.dataset.stockCount ?? "-1");
+        if (currentCount === nextCount) {
+          return;
+        }
+        stockPile.dataset.stockCount = String(nextCount);
+        stockPile.innerHTML =
+          nextCount > 0
+            ? renderCardSvg(cardBackUrl, "Stock pile", "opacity-90")
+            : renderEmptyCardSlot();
+        if (stockCount) {
+          stockCount.textContent = nextCount + " cards";
+        }
+      };
+      const updateWonPile = (selector, nextCount, label) => {
+        const pile = document.querySelector(selector);
+        if (!pile) {
+          return;
+        }
+        const currentCount = Number(pile.dataset.wonCount ?? "-1");
+        if (currentCount === nextCount) {
+          return;
+        }
+        pile.dataset.wonCount = String(nextCount);
+        pile.innerHTML = nextCount > 0 ? renderCardSvg(cardBackUrl, label, "opacity-80") : "";
+      };
+
+      const trumpContainer = document.querySelector("[data-trump-card]");
+      if (trumpContainer) {
+        trumpContainer.dataset.trumpKey = initialState.game.trumpCard
+          ? cardKey(initialState.game.trumpCard)
+          : "none";
+      }
+      const stockPile = document.querySelector("[data-stock-pile]");
+      if (stockPile) {
+        stockPile.dataset.stockCount = String(initialState.game.stock.length);
+      }
+      const playerWonPile = document.querySelector("[data-player-won-pile]");
+      if (playerWonPile) {
+        playerWonPile.dataset.wonCount = String(initialState.game.wonTricks[viewerIndex].length);
+      }
+      const opponentWonPile = document.querySelector("[data-opponent-won-pile]");
+      if (opponentWonPile) {
+        opponentWonPile.dataset.wonCount = String(initialState.game.wonTricks[opponentIndex].length);
+      }
+
       document.addEventListener("DOMContentLoaded", () => {
         if (!window.gsap) {
           return;
@@ -332,7 +598,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
         if (isWaiting) {
           window.addEventListener("resize", () => {
-            window.gsap.set(cards, { y: getWaitingOffset() });
+            const currentCards = Array.from(document.querySelectorAll("[data-player-card]"));
+            if (currentCards.length === 0) {
+              return;
+            }
+            window.gsap.set(currentCards, { y: getWaitingOffset() });
           });
         }
       });
@@ -348,8 +618,52 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return;
         }
 
-        // Placeholder: log updates until state diffing/animations are implemented.
-        console.log("Received game-state update", parsedState);
+        if (!parsedState || !parsedState.game) {
+          return;
+        }
+
+        const nextGame = parsedState.game;
+        const currentGame = currentState?.game;
+
+        if (
+          !currentGame ||
+          currentGame.leader !== nextGame.leader ||
+          !areHandsEqual(currentGame.playerHands[viewerIndex], nextGame.playerHands[viewerIndex])
+        ) {
+          updatePlayerHand(nextGame.playerHands[viewerIndex], nextGame.leader);
+        }
+
+        if (
+          !currentGame ||
+          currentGame.playerHands[opponentIndex].length !== nextGame.playerHands[opponentIndex].length
+        ) {
+          updateOpponentHand(nextGame.playerHands[opponentIndex].length);
+        }
+
+        if (!currentGame || !areCardsEqual(currentGame.trumpCard, nextGame.trumpCard)) {
+          updateTrumpCard(nextGame.trumpCard);
+        }
+
+        if (!currentGame || currentGame.stock.length !== nextGame.stock.length) {
+          updateStockPile(nextGame.stock.length);
+        }
+
+        if (!currentGame || currentGame.wonTricks[viewerIndex].length !== nextGame.wonTricks[viewerIndex].length) {
+          updateWonPile("[data-player-won-pile]", nextGame.wonTricks[viewerIndex].length, "Your won pile");
+        }
+
+        if (
+          !currentGame ||
+          currentGame.wonTricks[opponentIndex].length !== nextGame.wonTricks[opponentIndex].length
+        ) {
+          updateWonPile(
+            "[data-opponent-won-pile]",
+            nextGame.wonTricks[opponentIndex].length,
+            "Opponent won pile",
+          );
+        }
+
+        currentState = parsedState;
       });
     </script>
   `;
