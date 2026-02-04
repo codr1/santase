@@ -742,7 +742,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             if (canDeclareMarriage && (parsed.rank === "K" || parsed.rank === "Q")) {
               const declareable = findDeclareableMarriages(currentState, viewerIndex);
               if (declareable.includes(parsed.suit)) {
-                payload.marriage = parsed.suit;
+                payload.marriageSuit = parsed.suit;
               }
             }
             playRequestPending = true;

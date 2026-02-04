@@ -128,7 +128,7 @@ describe("play endpoint", () => {
 
     try {
       const response = await postPlay(room.code, { card: leadCard }, true);
-      expect(response.status).toBe(204);
+      expect(response.status).toBe(200);
 
       const nextGame = room.matchState.game;
       expect(nextGame.currentTrick?.leaderIndex).toBe(0);
@@ -170,10 +170,33 @@ describe("play endpoint", () => {
     try {
       const response = await postPlay(
         room.code,
-        { card: kingOfHearts, marriage: "hearts" },
+        { card: kingOfHearts, marriageSuit: "hearts" },
         true,
       );
-      expect(response.status).toBe(204);
+      expect(response.status).toBe(200);
+
+      const nextGame = room.matchState.game;
+      expect(nextGame.declaredMarriages).toContain("hearts");
+      expect(nextGame.roundScores[0]).toBe(40);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("accepts the deprecated marriage field", async () => {
+    const kingOfHearts: Card = { suit: "hearts", rank: "K" };
+    const queenOfHearts: Card = { suit: "hearts", rank: "Q" };
+    const game = buildGameState({
+      playerHands: [[kingOfHearts, queenOfHearts], [{ suit: "spades", rank: "9" }]],
+      leader: 0,
+      trumpSuit: "hearts",
+      trumpCard: { suit: "hearts", rank: "A" },
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postPlay(room.code, { card: kingOfHearts, marriage: "hearts" }, true);
+      expect(response.status).toBe(200);
 
       const nextGame = room.matchState.game;
       expect(nextGame.declaredMarriages).toContain("hearts");
@@ -219,7 +242,7 @@ describe("play endpoint", () => {
 
     try {
       const response = await postPlay(room.code, { card: followerCard }, false);
-      expect(response.status).toBe(204);
+      expect(response.status).toBe(200);
 
       const nextGame = room.matchState.game;
       expect(nextGame.roundResult?.reason).toBe("exhausted");
@@ -248,7 +271,7 @@ describe("play endpoint", () => {
 
     try {
       const response = await postPlay(room.code, { card: followerCard }, false);
-      expect(response.status).toBe(204);
+      expect(response.status).toBe(200);
 
       const nextGame = room.matchState.game;
       expect(nextGame.roundResult?.reason).toBe("closed_failed");

@@ -15,6 +15,7 @@ import {
   declareMarriage,
   drawFromStock,
   getValidFollowerCards,
+  isMatchOver,
   type Card,
   type Rank,
   type Suit,
@@ -42,11 +43,15 @@ function htmlResponse(
   });
 }
 
-function textResponse(message: string, status = 400): Response {
-  return new Response(message, {
+function jsonResponse(payload: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
     status,
-    headers: { "content-type": "text/plain; charset=utf-8" },
+    headers: { "content-type": "application/json; charset=utf-8" },
   });
+}
+
+function jsonError(message: string, status = 400): Response {
+  return jsonResponse({ ok: false, error: message }, status);
 }
 
 type RoomResolution = { room: Room } | { error: string; status: number };
@@ -132,6 +137,13 @@ function parseSuit(input: unknown): Suit | null {
   return ALLOWED_SUITS.has(input as Suit) ? (input as Suit) : null;
 }
 
+function getActivePlayerIndex(game: { leader: 0 | 1; currentTrick: { leaderIndex: 0 | 1 } | null }): 0 | 1 {
+  if (game.currentTrick) {
+    return game.currentTrick.leaderIndex === 0 ? 1 : 0;
+  }
+  return game.leader;
+}
+
 function removeCardFromHand(hand: Card[], card: Card): { nextHand: Card[]; removed: boolean } {
   const index = hand.findIndex(
     (candidate) => candidate.suit === card.suit && candidate.rank === card.rank,
@@ -181,50 +193,62 @@ export async function handleRequest(request: Request): Promise<Response> {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(playMatch[1]));
       const resolution = resolveRoom(normalizedCode);
       if ("error" in resolution) {
-        return textResponse(resolution.error, resolution.status);
+        return jsonError(resolution.error, resolution.status);
       }
       const room = resolution.room;
-      let payload: { card?: Card; marriage?: Suit } | null = null;
+      let payload: { card?: Card; marriageSuit?: Suit; marriage?: Suit } | null = null;
       try {
         payload = await request.json();
       } catch {
-        return textResponse("Invalid JSON payload.", 400);
+        return jsonError("Invalid JSON payload.", 400);
       }
       const card = parseCard(payload?.card);
       if (!card) {
-        return textResponse("Invalid card payload.", 400);
+        return jsonError("Invalid card payload.", 400);
       }
-      const marriage = payload?.marriage ? parseSuit(payload.marriage) : null;
-      if (payload?.marriage && !marriage) {
-        return textResponse("Invalid marriage payload.", 400);
+      let marriageSuit: Suit | null = null;
+      if (typeof payload?.marriageSuit !== "undefined") {
+        marriageSuit = parseSuit(payload.marriageSuit);
+        if (!marriageSuit) {
+          return jsonError("Invalid marriageSuit payload.", 400);
+        }
+      } else if (typeof payload?.marriage !== "undefined") {
+        marriageSuit = parseSuit(payload.marriage);
+        if (!marriageSuit) {
+          return jsonError("Invalid marriage payload.", 400);
+        }
       }
 
       const playerIndex = resolveViewerIndex(request, room);
       const game = room.matchState.game;
+      if (isMatchOver(room.matchState)) {
+        return jsonError("Match already ended.", 409);
+      }
       if (game.roundResult) {
-        return textResponse("Round already ended.", 409);
+        return jsonError("Round already ended.", 409);
       }
 
       const currentTrick = game.currentTrick;
+      const activePlayerIndex = getActivePlayerIndex(game);
+      if (playerIndex !== activePlayerIndex) {
+        return jsonError("Not your turn to play.", 409);
+      }
       if (!currentTrick) {
-        if (game.leader !== playerIndex) {
-          return textResponse("Not your turn to lead.", 409);
-        }
         let updatedGame = game;
-        if (marriage) {
-          if (card.suit !== marriage || (card.rank !== "K" && card.rank !== "Q")) {
-            return textResponse("Marriage must match the played king or queen.", 400);
+        if (marriageSuit) {
+          if (card.suit !== marriageSuit || (card.rank !== "K" && card.rank !== "Q")) {
+            return jsonError("Marriage must match the played king or queen.", 400);
           }
-          if (!canDeclareMarriage(updatedGame, playerIndex, marriage)) {
-            return textResponse("Marriage cannot be declared for this suit.", 400);
+          if (!canDeclareMarriage(updatedGame, playerIndex, marriageSuit)) {
+            return jsonError("Marriage cannot be declared for this suit.", 400);
           }
-          updatedGame = declareMarriage(updatedGame, playerIndex, marriage);
+          updatedGame = declareMarriage(updatedGame, playerIndex, marriageSuit);
         }
 
         const leaderHand = updatedGame.playerHands[playerIndex];
         const { nextHand, removed } = removeCardFromHand(leaderHand, card);
         if (!removed) {
-          return textResponse("Card not found in hand.", 400);
+          return jsonError("Card not found in hand.", 400);
         }
         const nextHands: [Card[], Card[]] =
           playerIndex === 0 ? [nextHand, updatedGame.playerHands[1]] : [updatedGame.playerHands[0], nextHand];
@@ -236,15 +260,12 @@ export async function handleRequest(request: Request): Promise<Response> {
         room.matchState = { ...room.matchState, game: nextGame };
         touchRoom(normalizedCode);
         broadcastGameState(normalizedCode, room.matchState);
-        return new Response(null, { status: 204 });
+        return jsonResponse({ ok: true }, 200);
       }
 
       const followerIndex: 0 | 1 = currentTrick.leaderIndex === 0 ? 1 : 0;
-      if (playerIndex !== followerIndex) {
-        return textResponse("Not your turn to follow.", 409);
-      }
-      if (marriage) {
-        return textResponse("Marriage declarations are only allowed when leading.", 400);
+      if (marriageSuit) {
+        return jsonError("Marriage declarations are only allowed when leading.", 400);
       }
 
       const followerHand = game.playerHands[playerIndex];
@@ -259,12 +280,12 @@ export async function handleRequest(request: Request): Promise<Response> {
           (candidate) => candidate.suit === card.suit && candidate.rank === card.rank,
         );
         if (!isValidFollowerCard) {
-          return textResponse("Invalid follower card.", 400);
+          return jsonError("Invalid follower card.", 400);
         }
       }
       const { nextHand, removed } = removeCardFromHand(followerHand, card);
       if (!removed) {
-        return textResponse("Card not found in hand.", 400);
+        return jsonError("Card not found in hand.", 400);
       }
 
       const nextHands: [Card[], Card[]] =
@@ -348,7 +369,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       room.matchState = nextMatchState;
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);
-      return new Response(null, { status: 204 });
+      return jsonResponse({ ok: true }, 200);
     }
   }
 
