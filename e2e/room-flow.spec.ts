@@ -58,7 +58,7 @@ if (!isBun) {
     }
   });
 
-  test("SSE updates connection status", async ({ browser }) => {
+  test("game auto-starts when guest joins via SSE", async ({ browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
 
@@ -67,38 +67,17 @@ if (!isBun) {
       const roomCode = await createRoom(hostPage);
 
       const guestPage = await guestContext.newPage();
-      await joinRoom(guestPage, roomCode);
 
-      const hostStatus = hostPage.locator("#lobby-status");
-      const guestStatus = guestPage.locator("#lobby-status");
-
-      await expect(hostStatus).toContainText("Opponent connected");
-      await expect(guestStatus).toContainText("Opponent connected");
-    } finally {
-      await hostContext.close();
-      await guestContext.close();
-    }
-  });
-
-  test("host can start game when guest connected", async ({ browser }) => {
-    const hostContext = await browser.newContext();
-    const guestContext = await browser.newContext();
-
-    try {
-      const hostPage = await hostContext.newPage();
-      const roomCode = await createRoom(hostPage);
-
-      const guestPage = await guestContext.newPage();
-      await joinRoom(guestPage, roomCode);
-
-      const startGameButton = hostPage.getByRole("button", { name: /start game/i });
-      await expect(startGameButton).toBeVisible();
-
+      // Wait for both pages to navigate to game after guest joins
       await Promise.all([
         hostPage.waitForURL(new RegExp(`/rooms/${roomCode}/game$`)),
         guestPage.waitForURL(new RegExp(`/rooms/${roomCode}/game$`)),
-        startGameButton.click(),
+        joinRoom(guestPage, roomCode),
       ]);
+
+      // Verify both are on the game page
+      await expect(hostPage.getByRole("heading", { name: "Game Starting" })).toBeVisible();
+      await expect(guestPage.getByRole("heading", { name: "Game Starting" })).toBeVisible();
     } finally {
       await hostContext.close();
       await guestContext.close();
