@@ -89,6 +89,13 @@ function renderEmptyCardSlot(variant: "standalone" | "inset" = "standalone"): st
   </div>`;
 }
 
+function getActivePlayerIndex(game: MatchState["game"]): 0 | 1 {
+  if (game.currentTrick) {
+    return game.currentTrick.leaderIndex === 0 ? 1 : 0;
+  }
+  return game.leader;
+}
+
 export function renderGamePage({ code, matchState, viewerIndex, hostToken }: GameOptions): string {
   const safeCode = escapeHtml(code);
   const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
@@ -113,7 +120,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const opponentWonCards = wonTricks[opponentIndex].length;
   const playerWonTricks = Math.floor(playerWonCards / 2);
   const opponentWonTricks = Math.floor(opponentWonCards / 2);
-  const isWaitingForTurn = matchState.game.leader !== playerIndex;
+  const isWaitingForTurn = getActivePlayerIndex(matchState.game) !== playerIndex;
   const suitMeta = SUIT_SYMBOLS[trumpSuit];
   const trumpCardMarkup = trumpCard
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
@@ -311,6 +318,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
     <script>
       const viewerIndex = ${playerIndex};
       const opponentIndex = ${opponentIndex};
+      const roomCode = ${JSON.stringify(code)};
       const initialState = ${JSON.stringify(matchState)};
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
@@ -333,8 +341,38 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const waitingOpacity = 0.65;
       // ~10% of card height (h-24/h-28) to keep waiting cards lifted subtly.
       const waitingOffsetPx = 11;
+      let animationsSettled = true;
+      let activeAnimations = 0;
+      let playRequestPending = false;
+
+      const trackAnimations = (count) => {
+        if (count <= 0) {
+          return () => {};
+        }
+        activeAnimations += count;
+        animationsSettled = false;
+        return () => {
+          activeAnimations = Math.max(0, activeAnimations - 1);
+          if (activeAnimations === 0) {
+            animationsSettled = true;
+          }
+        };
+      };
 
       const cardKey = (card) => card.rank + "-" + card.suit;
+      const parseCardKey = (key) => {
+        if (!key) {
+          return null;
+        }
+        const separatorIndex = key.lastIndexOf("-");
+        if (separatorIndex <= 0 || separatorIndex === key.length - 1) {
+          return null;
+        }
+        return {
+          rank: key.slice(0, separatorIndex),
+          suit: key.slice(separatorIndex + 1),
+        };
+      };
       const getCardImageUrl = (card) =>
         svgCardsCdn + "#" + suitIds[card.suit] + "_" + rankIds[card.rank];
       const renderCardSvg = (url, label, extraClasses = "") => {
@@ -401,6 +439,45 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         wrapper.innerHTML = renderCardSvg(cardBackUrl, "Card back", "opacity-90");
         return wrapper;
       };
+      const hasPotentialMarriage = (hand, suit) => {
+        let hasKing = false;
+        let hasQueen = false;
+        for (const card of hand) {
+          if (card.suit !== suit) {
+            continue;
+          }
+          if (card.rank === "K") {
+            hasKing = true;
+          } else if (card.rank === "Q") {
+            hasQueen = true;
+          }
+          if (hasKing && hasQueen) {
+            return true;
+          }
+        }
+        return false;
+      };
+      const findDeclareableMarriages = (state, playerIndex) => {
+        if (!state?.game) {
+          return [];
+        }
+        const declared = new Set(state.game.declaredMarriages ?? []);
+        const hand = state.game.playerHands[playerIndex] ?? [];
+        return Object.keys(suitIds).filter(
+          (suit) => !declared.has(suit) && hasPotentialMarriage(hand, suit),
+        );
+      };
+      const getActivePlayerIndex = (game) => {
+        if (!game) {
+          return null;
+        }
+        if (game.currentTrick && typeof game.currentTrick.leaderIndex === "number") {
+          return game.currentTrick.leaderIndex === 0 ? 1 : 0;
+        }
+        return game.leader;
+      };
+      const isPlayerTurn = (state, playerIndex) =>
+        getActivePlayerIndex(state?.game) === playerIndex;
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
       const areHandsEqual = (left, right) => {
@@ -413,6 +490,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
+        const completeAnimation = trackAnimations(cards.length);
         const waitingOffset = waitingOffsetPx;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
@@ -431,6 +509,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               duration: 0.6,
               ease: "power3.out",
               delay: index * 0.08,
+              onComplete: completeAnimation,
             },
           );
         });
@@ -439,6 +518,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
+        const completeAnimation = trackAnimations(cards.length);
         const waitingOffset = waitingOffsetPx;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
@@ -454,6 +534,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             duration: 0.45,
             ease: "power3.out",
             delay: index * 0.03,
+            onComplete: completeAnimation,
           });
         });
       };
@@ -461,24 +542,30 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
+        const completeAnimation = trackAnimations(cards.length);
         cards.forEach((card) => {
-          window.gsap.fromTo(card, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35 });
+          window.gsap.fromTo(
+            card,
+            { opacity: 0, y: 12 },
+            { opacity: 1, y: 0, duration: 0.35, onComplete: completeAnimation },
+          );
         });
       };
-      const updateWaitingState = (nextLeader) => {
+      const updateWaitingState = (nextGame) => {
         const hand = document.querySelector("[data-player-hand]");
         const board = document.querySelector(".game-board");
         if (!hand) {
           return;
         }
-        const isWaiting = nextLeader !== viewerIndex;
+        const activePlayer = getActivePlayerIndex(nextGame);
+        const isWaiting = activePlayer !== viewerIndex;
         const waitingValue = isWaiting ? "true" : "false";
         hand.dataset.waiting = waitingValue;
         if (board) {
           board.dataset.waiting = waitingValue;
         }
       };
-      const updatePlayerHand = (nextHand, nextLeader) => {
+      const updatePlayerHand = (nextHand, nextGame) => {
         const hand = document.querySelector("[data-player-hand]");
         if (!hand) {
           return;
@@ -527,8 +614,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           }
           hand.appendChild(cardEl);
         });
-        const isWaiting = nextLeader !== viewerIndex;
-        updateWaitingState(nextLeader);
+        const activePlayer = getActivePlayerIndex(nextGame);
+        const isWaiting = activePlayer !== viewerIndex;
+        updateWaitingState(nextGame);
         animateNewCards(newCards, isWaiting);
         const existingAnimationTargets = isWaiting === wasWaiting ? movedCards : retainedCards;
         animateExistingCards(existingAnimationTargets, isWaiting);
@@ -626,13 +714,63 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       }
 
       document.addEventListener("DOMContentLoaded", () => {
+        const hand = document.querySelector("[data-player-hand]");
+        if (hand) {
+          hand.addEventListener("click", async (event) => {
+            const cardEl = event.target.closest("[data-player-card]");
+            if (!cardEl || !(cardEl instanceof HTMLElement)) {
+              return;
+            }
+            if (!animationsSettled) {
+              return;
+            }
+            if (playRequestPending) {
+              return;
+            }
+            if (!isPlayerTurn(currentState, viewerIndex)) {
+              return;
+            }
+            const parsed = parseCardKey(cardEl.dataset.cardKey);
+            if (!parsed) {
+              return;
+            }
+            const payload = { card: parsed };
+            const canDeclareMarriage =
+              currentState?.game &&
+              !currentState.game.currentTrick &&
+              currentState.game.leader === viewerIndex;
+            if (canDeclareMarriage && (parsed.rank === "K" || parsed.rank === "Q")) {
+              const declareable = findDeclareableMarriages(currentState, viewerIndex);
+              if (declareable.includes(parsed.suit)) {
+                payload.marriage = parsed.suit;
+              }
+            }
+            playRequestPending = true;
+            try {
+              const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/play", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                console.warn("Play rejected", response.status, errorText);
+              }
+            } catch (error) {
+              console.warn("Failed to play card", error);
+            } finally {
+              playRequestPending = false;
+            }
+          });
+        }
         if (!window.gsap) {
           return;
         }
         const cards = Array.from(document.querySelectorAll("[data-player-card]"));
-        const hand = document.querySelector("[data-player-hand]");
         const isWaiting = hand?.dataset.waiting === "true";
         const waitingOffset = waitingOffsetPx;
+        const completeAnimation = trackAnimations(cards.length);
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -650,6 +788,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               duration: 0.6,
               ease: "power3.out",
               delay: index * 0.08,
+              onComplete: completeAnimation,
             },
           );
         });
@@ -674,12 +813,14 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const nextGame = parsedState.game;
         const currentGame = currentState?.game;
 
+        const nextActivePlayer = getActivePlayerIndex(nextGame);
+        const currentActivePlayer = getActivePlayerIndex(currentGame);
         if (
           !currentGame ||
-          currentGame.leader !== nextGame.leader ||
+          currentActivePlayer !== nextActivePlayer ||
           !areHandsEqual(currentGame.playerHands[viewerIndex], nextGame.playerHands[viewerIndex])
         ) {
-          updatePlayerHand(nextGame.playerHands[viewerIndex], nextGame.leader);
+          updatePlayerHand(nextGame.playerHands[viewerIndex], nextGame);
         }
 
         if (

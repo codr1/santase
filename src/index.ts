@@ -5,8 +5,20 @@ import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
 import { renderGamePage } from "./templates/game";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
-import { handleSse } from "./sse";
+import { broadcastGameState, handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
+import {
+  CARD_POINTS,
+  calculateGamePoints,
+  canDeclareMarriage,
+  compareTrick,
+  declareMarriage,
+  drawFromStock,
+  getValidFollowerCards,
+  type Card,
+  type Rank,
+  type Suit,
+} from "./game";
 
 const DEFAULT_PORT = 3000;
 const PUBLIC_ROOT = normalize(decodeURIComponent(new URL("../public", import.meta.url).pathname));
@@ -27,6 +39,13 @@ function htmlResponse(
       "content-type": "text/html; charset=utf-8",
       ...headers,
     },
+  });
+}
+
+function textResponse(message: string, status = 400): Response {
+  return new Response(message, {
+    status,
+    headers: { "content-type": "text/plain; charset=utf-8" },
   });
 }
 
@@ -87,7 +106,46 @@ function resolveViewerIndex(request: Request, room: Room): 0 | 1 {
   return room.hostPlayerIndex === 0 ? 1 : 0;
 }
 
-export function handleRequest(request: Request): Response {
+const ALLOWED_SUITS = new Set<Suit>(["hearts", "diamonds", "clubs", "spades"]);
+const ALLOWED_RANKS = new Set<Rank>(["9", "10", "J", "Q", "K", "A"]);
+
+function parseCard(input: unknown): Card | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const record = input as Record<string, unknown>;
+  const suit = record.suit;
+  const rank = record.rank;
+  if (typeof suit !== "string" || typeof rank !== "string") {
+    return null;
+  }
+  if (!ALLOWED_SUITS.has(suit as Suit) || !ALLOWED_RANKS.has(rank as Rank)) {
+    return null;
+  }
+  return { suit: suit as Suit, rank: rank as Rank };
+}
+
+function parseSuit(input: unknown): Suit | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+  return ALLOWED_SUITS.has(input as Suit) ? (input as Suit) : null;
+}
+
+function removeCardFromHand(hand: Card[], card: Card): { nextHand: Card[]; removed: boolean } {
+  const index = hand.findIndex(
+    (candidate) => candidate.suit === card.suit && candidate.rank === card.rank,
+  );
+  if (index < 0) {
+    return { nextHand: hand, removed: false };
+  }
+  return {
+    nextHand: [...hand.slice(0, index), ...hand.slice(index + 1)],
+    removed: true,
+  };
+}
+
+export async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
 
@@ -115,6 +173,183 @@ export function handleRequest(request: Request): Response {
   if (request.method === "POST" && path === "/rooms") {
     const room = createRoom();
     return Response.redirect(`/rooms/${room.code}/lobby`, 303);
+  }
+
+  if (request.method === "POST") {
+    const playMatch = path.match(/^\/rooms\/([^/]+)\/play$/);
+    if (playMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(playMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return textResponse(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      let payload: { card?: Card; marriage?: Suit } | null = null;
+      try {
+        payload = await request.json();
+      } catch {
+        return textResponse("Invalid JSON payload.", 400);
+      }
+      const card = parseCard(payload?.card);
+      if (!card) {
+        return textResponse("Invalid card payload.", 400);
+      }
+      const marriage = payload?.marriage ? parseSuit(payload.marriage) : null;
+      if (payload?.marriage && !marriage) {
+        return textResponse("Invalid marriage payload.", 400);
+      }
+
+      const playerIndex = resolveViewerIndex(request, room);
+      const game = room.matchState.game;
+      if (game.roundResult) {
+        return textResponse("Round already ended.", 409);
+      }
+
+      const currentTrick = game.currentTrick;
+      if (!currentTrick) {
+        if (game.leader !== playerIndex) {
+          return textResponse("Not your turn to lead.", 409);
+        }
+        let updatedGame = game;
+        if (marriage) {
+          if (card.suit !== marriage || (card.rank !== "K" && card.rank !== "Q")) {
+            return textResponse("Marriage must match the played king or queen.", 400);
+          }
+          if (!canDeclareMarriage(updatedGame, playerIndex, marriage)) {
+            return textResponse("Marriage cannot be declared for this suit.", 400);
+          }
+          updatedGame = declareMarriage(updatedGame, playerIndex, marriage);
+        }
+
+        const leaderHand = updatedGame.playerHands[playerIndex];
+        const { nextHand, removed } = removeCardFromHand(leaderHand, card);
+        if (!removed) {
+          return textResponse("Card not found in hand.", 400);
+        }
+        const nextHands: [Card[], Card[]] =
+          playerIndex === 0 ? [nextHand, updatedGame.playerHands[1]] : [updatedGame.playerHands[0], nextHand];
+        const nextGame = {
+          ...updatedGame,
+          playerHands: nextHands,
+          currentTrick: { leaderIndex: game.leader, leaderCard: card },
+        };
+        room.matchState = { ...room.matchState, game: nextGame };
+        touchRoom(normalizedCode);
+        broadcastGameState(normalizedCode, room.matchState);
+        return new Response(null, { status: 204 });
+      }
+
+      const followerIndex: 0 | 1 = currentTrick.leaderIndex === 0 ? 1 : 0;
+      if (playerIndex !== followerIndex) {
+        return textResponse("Not your turn to follow.", 409);
+      }
+      if (marriage) {
+        return textResponse("Marriage declarations are only allowed when leading.", 400);
+      }
+
+      const followerHand = game.playerHands[playerIndex];
+      if (game.isClosed || game.stock.length === 0) {
+        const validFollowerCards = getValidFollowerCards(
+          followerHand,
+          currentTrick.leaderCard,
+          game.trumpSuit,
+          true,
+        );
+        const isValidFollowerCard = validFollowerCards.some(
+          (candidate) => candidate.suit === card.suit && candidate.rank === card.rank,
+        );
+        if (!isValidFollowerCard) {
+          return textResponse("Invalid follower card.", 400);
+        }
+      }
+      const { nextHand, removed } = removeCardFromHand(followerHand, card);
+      if (!removed) {
+        return textResponse("Card not found in hand.", 400);
+      }
+
+      const nextHands: [Card[], Card[]] =
+        playerIndex === 0 ? [nextHand, game.playerHands[1]] : [game.playerHands[0], nextHand];
+      const winnerOffset = compareTrick(
+        currentTrick.leaderCard,
+        card,
+        currentTrick.leaderCard.suit,
+        game.trumpSuit,
+      );
+      const winnerIndex: 0 | 1 = winnerOffset === 0 ? currentTrick.leaderIndex : followerIndex;
+      const trickPoints = CARD_POINTS[currentTrick.leaderCard.rank] + CARD_POINTS[card.rank];
+      const nextWonTricks: [Card[], Card[]] = [
+        [...game.wonTricks[0]],
+        [...game.wonTricks[1]],
+      ];
+      nextWonTricks[winnerIndex] = [
+        ...nextWonTricks[winnerIndex],
+        currentTrick.leaderCard,
+        card,
+      ];
+      const nextRoundScores: [number, number] = [
+        game.roundScores[0],
+        game.roundScores[1],
+      ];
+      nextRoundScores[winnerIndex] += trickPoints;
+
+      let nextGame = {
+        ...game,
+        playerHands: nextHands,
+        leader: winnerIndex,
+        wonTricks: nextWonTricks,
+        roundScores: nextRoundScores,
+        currentTrick: null,
+      };
+
+      nextGame = drawFromStock(nextGame, winnerIndex);
+
+      let nextMatchState = { ...room.matchState, game: nextGame };
+      if (
+        !nextGame.roundResult &&
+        nextGame.playerHands[0].length === 0 &&
+        nextGame.playerHands[1].length === 0
+      ) {
+        const closerIndex = nextGame.closedBy;
+        if (
+          closerIndex !== null &&
+          nextGame.isClosed &&
+          nextGame.roundScores[closerIndex] < 66
+        ) {
+          const winner = closerIndex === 0 ? 1 : 0;
+          const gamePoints = 3;
+          nextGame = {
+            ...nextGame,
+            roundResult: { winner, gamePoints, reason: "closed_failed" },
+          };
+          nextMatchState = { ...nextMatchState, game: nextGame };
+          const nextScores: [number, number] = [
+            nextMatchState.matchScores[0],
+            nextMatchState.matchScores[1],
+          ];
+          nextScores[winner] += gamePoints;
+          nextMatchState = { ...nextMatchState, matchScores: nextScores };
+        } else {
+          const loserIndex = winnerIndex === 0 ? 1 : 0;
+          const gamePoints = calculateGamePoints(nextGame.roundScores[loserIndex]);
+          nextGame = {
+            ...nextGame,
+            roundResult: { winner: winnerIndex, gamePoints, reason: "exhausted" },
+          };
+          nextMatchState = { ...nextMatchState, game: nextGame };
+          const nextScores: [number, number] = [
+            nextMatchState.matchScores[0],
+            nextMatchState.matchScores[1],
+          ];
+          nextScores[winnerIndex] += gamePoints;
+          nextMatchState = { ...nextMatchState, matchScores: nextScores };
+        }
+      }
+
+      room.matchState = nextMatchState;
+      touchRoom(normalizedCode);
+      broadcastGameState(normalizedCode, room.matchState);
+      return new Response(null, { status: 204 });
+    }
   }
 
   if (request.method === "GET" && path === "/rooms") {
