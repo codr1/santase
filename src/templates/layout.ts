@@ -33,6 +33,7 @@ export function renderLayout({ title, body }: LayoutOptions): string {
     </script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
   </head>
   <body class="min-h-screen bg-white text-gray-900 font-sans antialiased">
     ${body}
