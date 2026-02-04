@@ -35,6 +35,7 @@ In-memory room storage with automatic cleanup.
 - **Host token**: UUID assigned at creation, used to authenticate host SSE connections
 - **Inactivity timeout**: 10 minutes
 - **Cleanup interval**: 10 minutes
+- **Expired room retention**: 1 hour (for better error messages)
 
 ### Room State
 
@@ -49,7 +50,24 @@ type Room = {
   createdAt: number;
   matchState: MatchState;
 };
+
+type RoomDeleteReason = "expired" | "host-left" | "manual";
+
+type RoomLookupResult =
+  | { status: "active"; room: Room }
+  | { status: "expired"; expiredAt: number; reason: RoomDeleteReason }
+  | { status: "missing" };
 ```
+
+### Room Lookup Errors
+
+| Status | HTTP Code | Message |
+|--------|-----------|---------|
+| active | 200 | - |
+| expired | 410 Gone | "Room expired. Start a new room." |
+| missing | 404 Not Found | "Room not found. Double-check the code." |
+
+SSE endpoint returns specific message for `host-left`: "Room closed because the host left."
 
 ## SSE
 
