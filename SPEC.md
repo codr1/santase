@@ -74,11 +74,12 @@ Server-Sent Events for real-time communication.
 
 ## Templates
 
-HTML rendering with HTMX integration.
+HTML rendering with HTMX integration and Tailwind CSS styling.
 
-- **Layout**: Common HTML shell with HTMX + SSE extension scripts
+- **Layout**: Common HTML shell with HTMX + SSE extension scripts, Tailwind CSS (CDN), Inter font
 - **Pages**: Home, Join, Lobby, Game
 - **XSS protection**: All dynamic content escaped via `escapeHtml()`
+- **Styles**: Shared button classes in `src/templates/styles.ts` (`buttonBaseClasses`)
 
 ## Game
 
