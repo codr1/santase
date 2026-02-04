@@ -159,6 +159,9 @@ if (import.meta.main) {
 
   Bun.serve({
     port,
+    // Disable idle timeout: SSE connections are long-lived, and the 25s heartbeat
+    // (see src/sse.ts:4) should not be cut off by any default timeout.
+    idleTimeout: 0,
     fetch(request) {
       return handleRequest(request);
     },
