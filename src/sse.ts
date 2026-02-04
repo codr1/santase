@@ -151,17 +151,23 @@ function removeClient(roomCode: string, client: SseClient): void {
     broadcastToRole(roomCode, "host", "start-game", startGameMarkup(roomCode, room.hostToken, status));
 
     if (client.role === "host" && !room.guestEverJoined && !status.hostConnected) {
-      deleteRoom(roomCode);
+      deleteRoom(roomCode, "host-left");
       clientsByRoom.delete(roomCode);
     }
   }
 }
 
 export function handleSse(request: Request, roomCode: string): Response {
-  const room = getRoom(roomCode);
-  if (!room) {
-    return new Response("Room not found", { status: 404 });
+  const lookup = getRoom(roomCode, { includeMetadata: true });
+  if (lookup.status !== "active") {
+    if (lookup.status === "expired") {
+      const message =
+        lookup.reason === "host-left" ? "Room closed because the host left." : "Room expired.";
+      return new Response(message, { status: 410 });
+    }
+    return new Response("Room not found.", { status: 404 });
   }
+  const { room } = lookup;
 
   const role = resolveRole(request.url, room.hostToken);
   let client: SseClient | null = null;

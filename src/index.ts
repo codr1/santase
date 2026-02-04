@@ -2,7 +2,7 @@ import { renderHomePage } from "./templates/home";
 import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
 import { renderGamePage } from "./templates/game";
-import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom } from "./rooms";
+import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
 import { handleSse, startGame } from "./sse";
 import { escapeHtml } from "./utils/html";
 
@@ -20,6 +20,19 @@ function htmlResponse(body: string, status = 200): Response {
       "content-type": "text/html; charset=utf-8",
     },
   });
+}
+
+type RoomResolution = { room: Room } | { error: string; status: number };
+
+function resolveRoom(normalizedCode: string): RoomResolution {
+  const lookup = getRoom(normalizedCode, { includeMetadata: true });
+  if (lookup.status === "active") {
+    return { room: lookup.room };
+  }
+  if (lookup.status === "expired") {
+    return { error: "Room expired. Start a new room.", status: 410 };
+  }
+  return { error: "Room not found. Double-check the code.", status: 404 };
 }
 
 export function handleRequest(request: Request): Response {
@@ -43,10 +56,14 @@ export function handleRequest(request: Request): Response {
     const startMatch = path.match(/^\/rooms\/([^/]+)\/start$/);
     if (startMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(startMatch[1]));
-      const room = getRoom(normalizedCode);
-      if (!room) {
-        return htmlResponse(renderJoinPage({ error: "Room not found.", code: normalizedCode }), 404);
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return htmlResponse(
+          renderJoinPage({ error: resolution.error, code: normalizedCode }),
+          resolution.status,
+        );
       }
+      const { room } = resolution;
       const hostToken = url.searchParams.get("hostToken");
       if (!hostToken || hostToken !== room.hostToken) {
         return new Response("Forbidden", { status: 403 });
@@ -66,11 +83,11 @@ export function handleRequest(request: Request): Response {
       return htmlResponse(renderJoinPage({ error: "Enter a room code." }), 400);
     }
     const normalizedCode = normalizeRoomCode(code);
-    const room = getRoom(normalizedCode);
-    if (!room) {
+    const resolution = resolveRoom(normalizedCode);
+    if ("error" in resolution) {
       return htmlResponse(
-        renderJoinPage({ error: "Room not found.", code: normalizedCode }),
-        404,
+        renderJoinPage({ error: resolution.error, code: normalizedCode }),
+        resolution.status,
       );
     }
     touchRoom(normalizedCode);
@@ -87,45 +104,49 @@ export function handleRequest(request: Request): Response {
     const lobbyMatch = path.match(/^\/rooms\/([^/]+)\/lobby$/);
     if (lobbyMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(lobbyMatch[1]));
-      const room = getRoom(normalizedCode);
-      if (!room) {
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
         return htmlResponse(
-          renderJoinPage({ error: "Room not found.", code: normalizedCode }),
-          404,
+          renderJoinPage({ error: resolution.error, code: normalizedCode }),
+          resolution.status,
         );
       }
       touchRoom(normalizedCode);
       return htmlResponse(
-        renderLobbyPage({ code: room.code, isHost: true, hostToken: room.hostToken }),
+        renderLobbyPage({
+          code: resolution.room.code,
+          isHost: true,
+          hostToken: resolution.room.hostToken,
+        }),
       );
     }
 
     const gameMatch = path.match(/^\/rooms\/([^/]+)\/game$/);
     if (gameMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(gameMatch[1]));
-      const room = getRoom(normalizedCode);
-      if (!room) {
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
         return htmlResponse(
-          renderJoinPage({ error: "Room not found.", code: normalizedCode }),
-          404,
+          renderJoinPage({ error: resolution.error, code: normalizedCode }),
+          resolution.status,
         );
       }
       touchRoom(normalizedCode);
-      return htmlResponse(renderGamePage({ code: room.code }));
+      return htmlResponse(renderGamePage({ code: resolution.room.code }));
     }
 
     const roomMatch = path.match(/^\/rooms\/([^/]+)$/);
     if (roomMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(roomMatch[1]));
-      const room = getRoom(normalizedCode);
-      if (!room) {
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
         return htmlResponse(
-          renderJoinPage({ error: "Room not found.", code: normalizedCode }),
-          404,
+          renderJoinPage({ error: resolution.error, code: normalizedCode }),
+          resolution.status,
         );
       }
       touchRoom(normalizedCode);
-      return htmlResponse(renderLobbyPage({ code: room.code }));
+      return htmlResponse(renderLobbyPage({ code: resolution.room.code }));
     }
   }
 
