@@ -3,7 +3,7 @@ import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
 import { renderGamePage } from "./templates/game";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
-import { handleSse, startGame } from "./sse";
+import { handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
 
 const DEFAULT_PORT = 3000;
@@ -50,31 +50,6 @@ export function handleRequest(request: Request): Response {
   if (request.method === "POST" && path === "/rooms") {
     const room = createRoom();
     return Response.redirect(`/rooms/${room.code}/lobby`, 303);
-  }
-
-  if (request.method === "POST") {
-    const startMatch = path.match(/^\/rooms\/([^/]+)\/start$/);
-    if (startMatch) {
-      const normalizedCode = normalizeRoomCode(decodeURIComponent(startMatch[1]));
-      const resolution = resolveRoom(normalizedCode);
-      if ("error" in resolution) {
-        return htmlResponse(
-          renderJoinPage({ error: resolution.error, code: normalizedCode }),
-          resolution.status,
-        );
-      }
-      const { room } = resolution;
-      const hostToken = url.searchParams.get("hostToken");
-      if (!hostToken || hostToken !== room.hostToken) {
-        return new Response("Forbidden", { status: 403 });
-      }
-      if (!room.guestConnected) {
-        return new Response("Guest not connected", { status: 409 });
-      }
-      touchRoom(normalizedCode);
-      startGame(normalizedCode);
-      return new Response(null, { status: 204 });
-    }
   }
 
   if (request.method === "GET" && path === "/rooms") {

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createRoom, deleteRoom } from "./rooms";
-import { handleSse, startGame } from "./sse";
-import { buttonBaseClasses } from "./templates/styles";
+import { handleSse } from "./sse";
 
 type SseEvent = {
   event: string;
@@ -86,11 +85,9 @@ describe("SSE status broadcasting", () => {
       throw new Error("Expected host SSE stream reader");
     }
 
-    const initialEvents = await readEvents(hostReader, 2);
+    const initialEvents = await readEvents(hostReader, 1);
     const initialStatus = initialEvents.find((event) => event.event === "status");
-    const initialStartGame = initialEvents.find((event) => event.event === "start-game");
     expect(initialStatus?.data).toBe("<span>Waiting for opponent...</span>");
-    expect(initialStartGame?.data).toBe("");
 
     const guestAbort = new AbortController();
     const guestRequest = new Request(`http://example/rooms/${room.code}`, {
@@ -99,70 +96,21 @@ describe("SSE status broadcasting", () => {
     const guestResponse = handleSse(guestRequest, room.code);
     void guestResponse;
 
-    const guestConnectEvents = await readEvents(hostReader, 4);
+    const guestConnectEvents = await readEvents(hostReader, 3);
     const connectedEvent = guestConnectEvents.find((event) => event.event === "connected");
     const gameStartAfterGuest = guestConnectEvents.find((event) => event.event === "game-start");
     const statusAfterGuest = guestConnectEvents.find((event) => event.event === "status");
-    const startGameAfterGuest = guestConnectEvents.find((event) => event.event === "start-game");
     expect(connectedEvent?.data).toBe("guest");
     expect(gameStartAfterGuest?.data).toBe(`/rooms/${room.code}/game`);
     expect(statusAfterGuest?.data).toBe("<span>Opponent connected</span>");
-    expect(startGameAfterGuest?.data).toBe(
-      `<button type="button" hx-post="/rooms/${room.code}/start?hostToken=${room.hostToken}" hx-swap="none" aria-label="Start game" class="${buttonBaseClasses} w-full bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg focus:ring-emerald-500">Start Game</button>`,
-    );
 
     guestAbort.abort();
-    const guestDisconnectEvents = await readEvents(hostReader, 2);
+    const guestDisconnectEvents = await readEvents(hostReader, 1);
     const statusAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "status");
-    const startGameAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "start-game");
     expect(statusAfterGuestLeft?.data).toBe("<span>Waiting for opponent...</span>");
-    expect(startGameAfterGuestLeft?.data).toBe("");
 
     hostAbort.abort();
     deleteRoom(room.code);
   });
 
-  test("broadcasts game-start to host and guest", async () => {
-    const room = createRoom();
-
-    const hostAbort = new AbortController();
-    const hostRequest = new Request(`http://example/rooms/${room.code}?hostToken=${room.hostToken}`, {
-      signal: hostAbort.signal,
-    });
-    const hostResponse = handleSse(hostRequest, room.code);
-    const hostReader = hostResponse.body?.getReader();
-    if (!hostReader) {
-      throw new Error("Expected host SSE stream reader");
-    }
-    await readEvents(hostReader, 2);
-
-    const guestAbort = new AbortController();
-    const guestRequest = new Request(`http://example/rooms/${room.code}`, {
-      signal: guestAbort.signal,
-    });
-    const guestResponse = handleSse(guestRequest, room.code);
-    const guestReader = guestResponse.body?.getReader();
-    if (!guestReader) {
-      throw new Error("Expected guest SSE stream reader");
-    }
-    const hostAutoStartEvents = await readEvents(hostReader, 4);
-    const guestAutoStartEvents = await readEvents(guestReader, 3);
-    const hostAutoStart = hostAutoStartEvents.find((event) => event.event === "game-start");
-    const guestAutoStart = guestAutoStartEvents.find((event) => event.event === "game-start");
-    expect(hostAutoStart?.data).toBe(`/rooms/${room.code}/game`);
-    expect(guestAutoStart?.data).toBe(`/rooms/${room.code}/game`);
-
-    startGame(room.code);
-
-    const hostGameStart = await readEvents(hostReader, 1);
-    const guestGameStart = await readEvents(guestReader, 1);
-    expect(hostGameStart[0]?.event).toBe("game-start");
-    expect(guestGameStart[0]?.event).toBe("game-start");
-    expect(hostGameStart[0]?.data).toBe(`/rooms/${room.code}/game`);
-    expect(guestGameStart[0]?.data).toBe(`/rooms/${room.code}/game`);
-
-    hostAbort.abort();
-    guestAbort.abort();
-    deleteRoom(room.code);
-  });
 });

@@ -23,7 +23,6 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | GET | `/rooms/:code` | Guest lobby view |
 | GET | `/rooms/:code/lobby` | Host lobby view |
 | GET | `/rooms/:code/game` | Game page view |
-| POST | `/rooms/:code/start` | Start game (host only, requires hostToken) |
 | GET | `/sse/:code` | SSE connection endpoint |
 
 ## Rooms
@@ -83,12 +82,7 @@ Server-Sent Events for real-time communication.
 |-------|--------|------|
 | `connected` | all | `"guest"` when guest first joins |
 | `status` | all | Lobby status HTML (`<span>` with connection state) |
-| `start-game` | host | Start button HTML (empty when guest disconnected) |
 | `game-start` | all | Game URL path for redirect |
-
-### Functions
-
-- `startGame(roomCode)`: Broadcasts `game-start` event with game URL to all clients
 
 ## Templates
 
