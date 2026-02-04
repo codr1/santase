@@ -1,5 +1,4 @@
 import { deleteRoom, getRoom, touchRoom } from "./rooms";
-import { buttonBaseClasses } from "./templates/styles";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 
@@ -55,28 +54,9 @@ function broadcast(roomCode: string, event: string, data: string): void {
   touchRoom(roomCode);
 }
 
-export function startGame(roomCode: string): void {
+function startGame(roomCode: string): void {
   const destination = `/rooms/${encodeURIComponent(roomCode)}/game`;
   broadcast(roomCode, "game-start", destination);
-}
-
-function broadcastToRole(roomCode: string, role: ClientRole, event: string, data: string): void {
-  const clients = clientsByRoom.get(roomCode);
-  if (!clients || clients.size === 0) {
-    return;
-  }
-  const payload = encodeEvent(event, data);
-  for (const client of clients) {
-    if (client.role !== role) {
-      continue;
-    }
-    try {
-      client.controller.enqueue(payload);
-    } catch {
-      // Ignore enqueue errors for closed streams.
-    }
-  }
-  touchRoom(roomCode);
 }
 
 function sendHeartbeat(roomCode: string, client: SseClient): void {
@@ -121,19 +101,6 @@ function statusMarkup(status: { guestConnected: boolean }): string {
   return `<span>${message}</span>`;
 }
 
-function startGameMarkup(
-  roomCode: string,
-  hostToken: string | undefined,
-  status: { guestConnected: boolean },
-): string {
-  if (!status.guestConnected) {
-    return "";
-  }
-  const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
-  const action = `/rooms/${encodeURIComponent(roomCode)}/start${tokenQuery}`;
-  return `<button type="button" hx-post="${action}" hx-swap="none" aria-label="Start game" class="${buttonBaseClasses} w-full bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg focus:ring-emerald-500">Start Game</button>`;
-}
-
 function removeClient(roomCode: string, client: SseClient): void {
   const clients = clientsByRoom.get(roomCode);
   if (!clients) {
@@ -148,7 +115,6 @@ function removeClient(roomCode: string, client: SseClient): void {
   const room = getRoom(roomCode);
   if (room) {
     broadcast(roomCode, "status", statusMarkup(status));
-    broadcastToRole(roomCode, "host", "start-game", startGameMarkup(roomCode, room.hostToken, status));
 
     if (client.role === "host" && !room.guestEverJoined && !status.hostConnected) {
       deleteRoom(roomCode, "host-left");
@@ -188,17 +154,12 @@ export function handleSse(request: Request, roomCode: string): Response {
         room.guestEverJoined = true;
         if (isFirstGuest) {
           broadcast(roomCode, "connected", "guest");
+          startGame(roomCode);
         }
       }
 
       const status = updateRoomConnections(roomCode);
       broadcast(roomCode, "status", statusMarkup(status));
-      broadcastToRole(
-        roomCode,
-        "host",
-        "start-game",
-        startGameMarkup(roomCode, room.hostToken, status),
-      );
       touchRoom(roomCode);
       client.heartbeat = setInterval(() => {
         if (client) {

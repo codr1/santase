@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { handleRequest } from "./index";
 import { createRoom, deleteRoom } from "./rooms";
 import { handleSse } from "./sse";
 
@@ -72,7 +71,7 @@ async function readEvents(
   return events.slice(0, count);
 }
 
-describe("Lobby start flow", () => {
+describe("Lobby auto-start flow", () => {
   test("sends status event when guest connects", async () => {
     const room = createRoom();
 
@@ -85,7 +84,7 @@ describe("Lobby start flow", () => {
     if (!hostReader) {
       throw new Error("Expected host SSE stream reader");
     }
-    await readEvents(hostReader, 2);
+    await readEvents(hostReader, 1);
 
     const guestAbort = new AbortController();
     const guestRequest = new Request(`http://example/sse/${room.code}`, {
@@ -103,36 +102,7 @@ describe("Lobby start flow", () => {
     deleteRoom(room.code);
   });
 
-  test("returns 403 when host token is missing or invalid", () => {
-    const room = createRoom();
-
-    const request = new Request(`http://example/rooms/${room.code}/start`, {
-      method: "POST",
-    });
-    const response = handleRequest(request);
-
-    expect(response.status).toBe(403);
-
-    deleteRoom(room.code);
-  });
-
-  test("returns 409 when guest is not connected", () => {
-    const room = createRoom();
-
-    const request = new Request(
-      `http://example/rooms/${room.code}/start?hostToken=${room.hostToken}`,
-      {
-        method: "POST",
-      },
-    );
-    const response = handleRequest(request);
-
-    expect(response.status).toBe(409);
-
-    deleteRoom(room.code);
-  });
-
-  test("broadcasts game-start when host starts the game", async () => {
+  test("broadcasts game-start when guest connects", async () => {
     const room = createRoom();
 
     const hostAbort = new AbortController();
@@ -144,7 +114,7 @@ describe("Lobby start flow", () => {
     if (!hostReader) {
       throw new Error("Expected host SSE stream reader");
     }
-    await readEvents(hostReader, 2);
+    await readEvents(hostReader, 1);
 
     const guestAbort = new AbortController();
     const guestRequest = new Request(`http://example/sse/${room.code}`, {
@@ -155,26 +125,12 @@ describe("Lobby start flow", () => {
     if (!guestReader) {
       throw new Error("Expected guest SSE stream reader");
     }
-    await readEvents(hostReader, 3);
-    await readEvents(guestReader, 2);
-
-    const startRequest = new Request(
-      `http://example/rooms/${room.code}/start?hostToken=${room.hostToken}`,
-      {
-        method: "POST",
-      },
-    );
-    const startResponse = handleRequest(startRequest);
-
-    expect(startResponse.status).toBe(204);
-
-    const hostGameStart = await readEvents(hostReader, 1);
-    const guestGameStart = await readEvents(guestReader, 1);
-
-    expect(hostGameStart[0]?.event).toBe("game-start");
-    expect(guestGameStart[0]?.event).toBe("game-start");
-    expect(hostGameStart[0]?.data).toBe(`/rooms/${room.code}/game`);
-    expect(guestGameStart[0]?.data).toBe(`/rooms/${room.code}/game`);
+    const hostAutoStartEvents = await readEvents(hostReader, 3);
+    const guestAutoStartEvents = await readEvents(guestReader, 3);
+    const hostAutoStart = hostAutoStartEvents.find((event) => event.event === "game-start");
+    const guestAutoStart = guestAutoStartEvents.find((event) => event.event === "game-start");
+    expect(hostAutoStart?.data).toBe(`/rooms/${room.code}/game`);
+    expect(guestAutoStart?.data).toBe(`/rooms/${room.code}/game`);
 
     hostAbort.abort();
     guestAbort.abort();

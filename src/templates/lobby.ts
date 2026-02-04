@@ -15,9 +15,6 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
   const safeSseUrl = escapeHtml(sseUrl);
   const gamePathJson = JSON.stringify(`/rooms/${encodeURIComponent(code)}/game`);
   const waitingStatusMarkup = `<span>Waiting for opponent...</span>`;
-  const startGameSection = isHost
-    ? `<div id="start-game" sse-swap="start-game" class="w-full max-w-sm"></div>`
-    : "";
   const body = `
     <main
       hx-ext="sse"
@@ -38,7 +35,6 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
       >
         ${waitingStatusMarkup}
       </p>
-      ${startGameSection}
       <p>
         <a href="/" class="text-sm font-medium text-slate-600 hover:underline">Back to home</a>
       </p>
