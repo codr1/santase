@@ -408,6 +408,30 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           );
         });
       };
+      const animateExistingCards = (cards, isWaiting) => {
+        if (!window.gsap || cards.length === 0) {
+          return;
+        }
+        const waitingOffset = Math.round(window.innerHeight * 0.33);
+        const waitingFilter = "grayscale(0.45)";
+        const waitingOpacity = 0.65;
+        cards.forEach((card, index) => {
+          const fanX = Number(card.dataset.fanX ?? "50");
+          const fanRot = Number(card.dataset.fanRot ?? "0");
+          window.gsap.to(card, {
+            left: fanX + "%",
+            xPercent: -50,
+            y: isWaiting ? waitingOffset : 0,
+            opacity: isWaiting ? waitingOpacity : 1,
+            pointerEvents: isWaiting ? "none" : "auto",
+            filter: isWaiting ? waitingFilter : "grayscale(0)",
+            rotation: fanRot,
+            duration: 0.45,
+            ease: "power3.out",
+            delay: index * 0.03,
+          });
+        });
+      };
       const animateOpponentCards = (cards) => {
         if (!window.gsap || cards.length === 0) {
           return;
@@ -434,6 +458,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!hand) {
           return;
         }
+        const wasWaiting = hand.dataset.waiting === "true";
         const nextKeys = new Set(nextHand.map(cardKey));
         const existingCards = Array.from(hand.querySelectorAll("[data-player-card]"));
         const existingByKey = new Map();
@@ -450,6 +475,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         });
         const fanLayout = getFanLayout(nextHand.length);
         const newCards = [];
+        const retainedCards = [];
+        const movedCards = [];
         nextHand.forEach((card, index) => {
           const key = cardKey(card);
           const fanX = fanLayout.positions[index] ?? 50;
@@ -459,18 +486,27 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             cardEl = createPlayerCardElement(card, index, fanX, fanRot);
             newCards.push(cardEl);
           } else {
+            const prevFanX = Number(cardEl.dataset.fanX ?? "50");
+            const prevFanRot = Number(cardEl.dataset.fanRot ?? "0");
+            const prevIndex = Number(cardEl.dataset.cardIndex ?? "0");
             cardEl.dataset.cardIndex = String(index);
             cardEl.dataset.fanX = String(fanX);
             cardEl.dataset.fanRot = String(fanRot);
             cardEl.style.setProperty("--fan-x", fanX + "%");
             cardEl.style.setProperty("--fan-rot", fanRot + "deg");
             cardEl.style.setProperty("--fan-index", String(index));
+            retainedCards.push(cardEl);
+            if (prevFanX !== fanX || prevFanRot !== fanRot || prevIndex !== index) {
+              movedCards.push(cardEl);
+            }
           }
           hand.appendChild(cardEl);
         });
         const isWaiting = nextLeader !== viewerIndex;
         updateWaitingState(nextLeader);
         animateNewCards(newCards, isWaiting);
+        const existingAnimationTargets = isWaiting === wasWaiting ? movedCards : retainedCards;
+        animateExistingCards(existingAnimationTargets, isWaiting);
       };
       const updateOpponentHand = (nextCount) => {
         const hand = document.querySelector("[data-opponent-hand]");
