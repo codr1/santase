@@ -148,6 +148,9 @@ export function handleSse(request: Request, roomCode: string): Response {
 
       const clients = ensureRoomClients(roomCode);
       clients.add(client);
+      if (role === "host") {
+        console.log(`SSE host connected: ${roomCode}`);
+      }
 
       if (role === "guest") {
         const isFirstGuest = !room.guestEverJoined;
