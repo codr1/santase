@@ -319,6 +319,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         K: "king",
         A: "1",
       };
+      const waitingFilter = "grayscale(0.45)";
+      const waitingOpacity = 0.65;
+      const getWaitingOffset = () => Math.round(window.innerHeight * 0.33);
 
       const cardKey = (card) => card.rank + "-" + card.suit;
       const getCardImageUrl = (card) =>
@@ -384,9 +387,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
-        const waitingOffset = Math.round(window.innerHeight * 0.33);
-        const waitingFilter = "grayscale(0.45)";
-        const waitingOpacity = 0.65;
+        const waitingOffset = getWaitingOffset();
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -412,9 +413,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
-        const waitingOffset = Math.round(window.innerHeight * 0.33);
-        const waitingFilter = "grayscale(0.45)";
-        const waitingOpacity = 0.65;
+        const waitingOffset = getWaitingOffset();
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -607,10 +606,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const cards = Array.from(document.querySelectorAll("[data-player-card]"));
         const hand = document.querySelector("[data-player-hand]");
         const isWaiting = hand?.dataset.waiting === "true";
-        const getWaitingOffset = () => Math.round(window.innerHeight * 0.33);
         const waitingOffset = getWaitingOffset();
-        const waitingFilter = "grayscale(0.45)";
-        const waitingOpacity = 0.65;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
