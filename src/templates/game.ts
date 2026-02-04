@@ -107,6 +107,7 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
   const opponentWonCards = wonTricks[opponentIndex].length;
   const playerWonTricks = Math.floor(playerWonCards / 2);
   const opponentWonTricks = Math.floor(opponentWonCards / 2);
+  const isWaitingForTurn = matchState.game.leader !== playerIndex;
   const suitMeta = SUIT_SYMBOLS[trumpSuit];
   const trumpCardMarkup = trumpCard
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
@@ -127,6 +128,9 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
       .player-hand {
         position: relative;
         height: 8rem;
+      }
+      .game-board[data-waiting="true"] {
+        padding-bottom: clamp(3.5rem, 12vh, 9rem);
       }
       @media (min-width: 640px) {
         .player-hand {
@@ -159,7 +163,10 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
           </div>
         </header>
 
-        <section class="flex flex-col gap-6 rounded-3xl bg-emerald-900/40 p-5 shadow-2xl shadow-black/30 ring-1 ring-emerald-200/20">
+        <section
+          class="game-board flex flex-col gap-6 rounded-3xl bg-emerald-900/40 p-5 shadow-2xl shadow-black/30 ring-1 ring-emerald-200/20"
+          data-waiting="${isWaitingForTurn ? "true" : "false"}"
+        >
           <div class="flex flex-col gap-4">
             <div class="flex flex-wrap items-center justify-between gap-4">
               <div>
@@ -257,7 +264,11 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
                 </div>
               </div>
             </div>
-            <div class="player-hand mx-auto w-full max-w-xl">
+            <div
+              class="player-hand mx-auto w-full max-w-xl"
+              data-player-hand="true"
+              data-waiting="${isWaitingForTurn ? "true" : "false"}"
+            >
               ${renderFaceUpCards(playerHand)}
             </div>
           </div>
@@ -274,17 +285,25 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
           return;
         }
         const cards = Array.from(document.querySelectorAll("[data-player-card]"));
+        const hand = document.querySelector("[data-player-hand]");
+        const isWaiting = hand?.dataset.waiting === "true";
+        const getWaitingOffset = () => Math.round(window.innerHeight * 0.33);
+        const waitingOffset = getWaitingOffset();
+        const waitingFilter = "grayscale(0.45)";
+        const waitingOpacity = 0.65;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
           window.gsap.fromTo(
             card,
-            { left: "50%", xPercent: -50, y: 36, opacity: 0, rotation: 0 },
+            { left: "50%", xPercent: -50, y: 36, opacity: 0, rotation: 0, filter: "grayscale(0)" },
             {
               left: fanX + "%",
               xPercent: -50,
-              y: 0,
-              opacity: 1,
+              y: isWaiting ? waitingOffset : 0,
+              opacity: isWaiting ? waitingOpacity : 1,
+              pointerEvents: isWaiting ? "none" : "auto",
+              filter: isWaiting ? waitingFilter : "grayscale(0)",
               rotation: fanRot,
               duration: 0.6,
               ease: "power3.out",
@@ -292,6 +311,12 @@ export function renderGamePage({ code, matchState, viewerIndex }: GameOptions): 
             },
           );
         });
+
+        if (isWaiting) {
+          window.addEventListener("resize", () => {
+            window.gsap.set(cards, { y: getWaitingOffset() });
+          });
+        }
       });
     </script>
   `;
