@@ -42,6 +42,7 @@ In-memory room storage with automatic cleanup.
 type Room = {
   code: string;
   hostToken: string;
+  hostPlayerIndex: 0 | 1;
   hostConnected: boolean;
   guestConnected: boolean;
   guestEverJoined: boolean;
@@ -83,15 +84,35 @@ Server-Sent Events for real-time communication.
 | `connected` | all | `"guest"` when guest first joins |
 | `status` | all | Lobby status HTML (`<span>` with connection state) |
 | `game-start` | all | Game URL path for redirect |
+| `game-state` | all | JSON-serialized `MatchState` for real-time updates |
 
 ## Templates
 
 HTML rendering with HTMX integration and Tailwind CSS styling.
 
-- **Layout**: Common HTML shell with HTMX + SSE extension scripts, Tailwind CSS (CDN), Inter font
+- **Layout**: Common HTML shell with HTMX + SSE extension scripts, Tailwind CSS (CDN), Inter font, GSAP animation library
 - **Pages**: Home, Join, Lobby, Game
 - **XSS protection**: All dynamic content escaped via `escapeHtml()`
 - **Styles**: Shared button classes in `src/templates/styles.ts` (`buttonBaseClasses`)
+
+### Card Rendering
+
+SVG sprite-based card images via `svg-cards` CDN package.
+
+- **Face cards**: `getCardImageUrl(card)` returns sprite URL for any Card
+- **Card backs**: `getCardBackUrl()` returns sprite URL for card back
+- **Format**: URLs are SVG fragment identifiers for use with `<svg><use href="...">` pattern
+
+### Game Page
+
+Renders the interactive game board with viewer-specific perspective.
+
+- **Viewer resolution**: Host identified via `hostToken` query param or `hostToken-{code}` cookie; determines which hand is shown face-up
+- **Host cookie**: Set on lobby page load with `Path=/rooms/{code}; SameSite=Lax; HttpOnly`
+- **Layout sections**: Opponent hand (face-down), scores panel, current trick area, trump/stock display, player hand (face-up fan)
+- **Card fan**: Player cards arranged in arc with GSAP animation on page load
+- **Waiting state**: When not player's turn, cards shift down and desaturate; responds to window resize
+- **SSE connection**: Subscribes to `game-state` events for real-time updates
 
 ## Game
 
