@@ -56,6 +56,7 @@ function broadcast(roomCode: string, event: string, data: string): void {
 
 function startGame(roomCode: string): void {
   const destination = `/rooms/${encodeURIComponent(roomCode)}/game`;
+  console.log(`Game starting: ${roomCode}`);
   broadcast(roomCode, "game-start", destination);
 }
 
@@ -106,7 +107,10 @@ function removeClient(roomCode: string, client: SseClient): void {
   if (!clients) {
     return;
   }
-  clients.delete(client);
+  const removed = clients.delete(client);
+  if (removed) {
+    console.log(`SSE ${client.role} disconnected: ${roomCode}`);
+  }
   if (clients.size === 0) {
     clientsByRoom.delete(roomCode);
   }
@@ -148,6 +152,11 @@ export function handleSse(request: Request, roomCode: string): Response {
 
       const clients = ensureRoomClients(roomCode);
       clients.add(client);
+      if (role === "host") {
+        console.log(`SSE host connected: ${roomCode}`);
+      } else if (role === "guest") {
+        console.log(`SSE guest connected: ${roomCode}`);
+      }
 
       if (role === "guest") {
         const isFirstGuest = !room.guestEverJoined;
