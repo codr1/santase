@@ -46,12 +46,13 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
       </p>
     </main>
     <script>
-      document.body.addEventListener("htmx:sseMessage", (event) => {
-        const detail = event.detail || {};
-        if (detail.type !== "game-start") return;
-        const destination = detail.data || ${gamePathJson};
-        window.location.assign(destination);
-      });
+      const gameStartListener = document.getElementById("game-start-listener");
+      if (gameStartListener) {
+        gameStartListener.addEventListener("htmx:afterSettle", () => {
+          const destination = gameStartListener.textContent?.trim() || ${gamePathJson};
+          window.location.assign(destination);
+        });
+      }
     </script>
   `;
 
