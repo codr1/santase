@@ -94,7 +94,7 @@ describe("Lobby start flow", () => {
     const guestResponse = handleSse(guestRequest, room.code);
     void guestResponse;
 
-    const guestConnectEvents = await readEvents(hostReader, 3);
+    const guestConnectEvents = await readEvents(hostReader, 4);
     const statusEvent = guestConnectEvents.find((event) => event.event === "status");
     expect(statusEvent?.data).toBe("<span>Opponent connected</span>");
 
@@ -155,8 +155,12 @@ describe("Lobby start flow", () => {
     if (!guestReader) {
       throw new Error("Expected guest SSE stream reader");
     }
-    await readEvents(hostReader, 3);
-    await readEvents(guestReader, 2);
+    const hostAutoStartEvents = await readEvents(hostReader, 4);
+    const guestAutoStartEvents = await readEvents(guestReader, 3);
+    const hostAutoStart = hostAutoStartEvents.find((event) => event.event === "game-start");
+    const guestAutoStart = guestAutoStartEvents.find((event) => event.event === "game-start");
+    expect(hostAutoStart?.data).toBe(`/rooms/${room.code}/game`);
+    expect(guestAutoStart?.data).toBe(`/rooms/${room.code}/game`);
 
     const startRequest = new Request(
       `http://example/rooms/${room.code}/start?hostToken=${room.hostToken}`,

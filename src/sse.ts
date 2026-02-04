@@ -188,6 +188,7 @@ export function handleSse(request: Request, roomCode: string): Response {
         room.guestEverJoined = true;
         if (isFirstGuest) {
           broadcast(roomCode, "connected", "guest");
+          startGame(roomCode);
         }
       }
 
