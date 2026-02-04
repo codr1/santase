@@ -107,7 +107,10 @@ function removeClient(roomCode: string, client: SseClient): void {
   if (!clients) {
     return;
   }
-  clients.delete(client);
+  const removed = clients.delete(client);
+  if (removed) {
+    console.log(`SSE ${client.role} disconnected: ${roomCode}`);
+  }
   if (clients.size === 0) {
     clientsByRoom.delete(roomCode);
   }
