@@ -169,6 +169,10 @@ export function handleSse(request: Request, roomCode: string): Response {
         if (isFirstGuest) {
           broadcast(roomCode, "connected", "guest");
           startGame(roomCode);
+          const updatedRoom = getRoom(roomCode);
+          if (updatedRoom) {
+            broadcastGameState(roomCode, updatedRoom.matchState);
+          }
         }
       }
 

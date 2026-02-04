@@ -96,12 +96,14 @@ describe("SSE status broadcasting", () => {
     const guestResponse = handleSse(guestRequest, room.code);
     void guestResponse;
 
-    const guestConnectEvents = await readEvents(hostReader, 3);
+    const guestConnectEvents = await readEvents(hostReader, 4);
     const connectedEvent = guestConnectEvents.find((event) => event.event === "connected");
     const gameStartAfterGuest = guestConnectEvents.find((event) => event.event === "game-start");
+    const gameStateAfterGuest = guestConnectEvents.find((event) => event.event === "game-state");
     const statusAfterGuest = guestConnectEvents.find((event) => event.event === "status");
     expect(connectedEvent?.data).toBe("guest");
     expect(gameStartAfterGuest?.data).toBe(`/rooms/${room.code}/game`);
+    expect(gameStateAfterGuest?.data).toBe(JSON.stringify(room.matchState));
     expect(statusAfterGuest?.data).toBe("<span>Opponent connected</span>");
 
     guestAbort.abort();
