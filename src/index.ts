@@ -159,6 +159,7 @@ if (import.meta.main) {
 
   Bun.serve({
     port,
+    idleTimeout: 0,
     fetch(request) {
       return handleRequest(request);
     },
