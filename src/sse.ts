@@ -150,6 +150,8 @@ export function handleSse(request: Request, roomCode: string): Response {
       clients.add(client);
       if (role === "host") {
         console.log(`SSE host connected: ${roomCode}`);
+      } else if (role === "guest") {
+        console.log(`SSE guest connected: ${roomCode}`);
       }
 
       if (role === "guest") {
