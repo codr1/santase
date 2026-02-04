@@ -22,9 +22,9 @@ function renderCardSvg(url: string, label?: string, extraClasses = ""): string {
   const aria = label
     ? `role="img" aria-label="${escapeHtml(label)}"`
     : `aria-hidden="true"`;
-  const classes = `h-24 w-16 sm:h-28 sm:w-20 ${extraClasses}`.trim();
+  const classes = `card-svg ${extraClasses}`.trim();
   return `
-    <svg ${aria} class="${classes}">
+    <svg ${aria} class="${classes}" viewBox="0 0 169.075 244.640">
       <use href="${url}"></use>
     </svg>
   `;
@@ -38,7 +38,7 @@ function renderFaceUpCards(cards: Card[]): string {
       const fanX = fanLayout.positions[index] ?? 50;
       const fanRot = fanLayout.rotations[index] ?? 0;
       return `<div
-        class="player-card rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20"
+        class="player-card h-24 w-16 rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20"
         data-player-card="true"
         data-card-index="${index}"
         data-card-key="${card.rank}-${card.suit}"
@@ -76,14 +76,15 @@ function getFanLayout(count: number): { positions: number[]; rotations: number[]
 function renderFaceDownCards(count: number): string {
   const backUrl = getCardBackUrl();
   return Array.from({ length: count }, () => {
-    return `<div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" data-opponent-card="true">
+    return `<div class="h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20" data-opponent-card="true">
       ${renderCardSvg(backUrl, "Card back", "opacity-90")}
     </div>`;
   }).join("");
 }
 
-function renderEmptyCardSlot(): string {
-  return `<div class="flex h-24 w-16 items-center justify-center rounded-xl border border-dashed border-emerald-200/50 sm:h-28 sm:w-20">
+function renderEmptyCardSlot(variant: "standalone" | "inset" = "standalone"): string {
+  const roundedClass = variant === "inset" ? "rounded-lg" : "rounded-xl";
+  return `<div class="card-slot flex h-full w-full items-center justify-center ${roundedClass} border border-dashed border-emerald-200/50">
     <span class="text-xs text-emerald-200/70">Empty</span>
   </div>`;
 }
@@ -116,12 +117,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const suitMeta = SUIT_SYMBOLS[trumpSuit];
   const trumpCardMarkup = trumpCard
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
-    : renderEmptyCardSlot();
+    : renderEmptyCardSlot("inset");
   const stockCount = stock.length;
   const stockPileMarkup =
     stockCount > 0
       ? renderCardSvg(getCardBackUrl(), "Stock pile", "opacity-90")
-      : renderEmptyCardSlot();
+      : renderEmptyCardSlot("inset");
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -137,6 +138,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       }
       .game-board[data-waiting="true"] {
         padding-bottom: clamp(3.5rem, 12vh, 9rem);
+      }
+      .card-svg {
+        width: 100%;
+        height: 100%;
       }
       @media (min-width: 640px) {
         .player-hand {
@@ -200,7 +205,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   <span class="text-emerald-200/70">Cards</span>
                   <span class="text-lg font-semibold">${opponentWonCards}</span>
                 </div>
-                <div class="flex items-center" data-opponent-won-pile="true">
+                <div class="flex h-24 w-16 items-center sm:h-28 sm:w-20" data-opponent-won-pile="true">
                   ${opponentWonPileMarkup}
                 </div>
               </div>
@@ -238,8 +243,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
               <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Current trick</p>
               <div class="mt-4 flex items-center justify-center gap-4" data-trick-area="true">
-                ${renderEmptyCardSlot()}
-                ${renderEmptyCardSlot()}
+                <div class="h-24 w-16 sm:h-28 sm:w-20">${renderEmptyCardSlot()}</div>
+                <div class="h-24 w-16 sm:h-28 sm:w-20">${renderEmptyCardSlot()}</div>
               </div>
               <p class="mt-3 text-center text-xs text-emerald-200/70">No cards played yet</p>
             </div>
@@ -249,11 +254,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               <div class="mt-4 flex items-center justify-center gap-6">
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Trump card</span>
-                  <div data-trump-card="true">${trumpCardMarkup}</div>
+                  <div
+                    class="h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20"
+                    data-trump-card="true"
+                  >
+                    ${trumpCardMarkup}
+                  </div>
                 </div>
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Stock</span>
-                  <div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" data-stock-pile="true">
+                  <div class="h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20" data-stock-pile="true">
                     ${stockPileMarkup}
                   </div>
                   <span class="text-sm font-semibold" data-stock-count="true">${stockCount} cards</span>
@@ -277,7 +287,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   <span class="text-emerald-200/70">Cards</span>
                   <span class="text-lg font-semibold">${playerWonCards}</span>
                 </div>
-                <div class="flex items-center" data-player-won-pile="true">
+                <div class="flex h-24 w-16 items-center sm:h-28 sm:w-20" data-player-won-pile="true">
                   ${playerWonPileMarkup}
                 </div>
               </div>
@@ -329,13 +339,27 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         svgCardsCdn + "#" + suitIds[card.suit] + "_" + rankIds[card.rank];
       const renderCardSvg = (url, label, extraClasses = "") => {
         const aria = label ? 'role="img" aria-label="' + label + '"' : 'aria-hidden="true"';
-        const classes = ("h-24 w-16 sm:h-28 sm:w-20 " + extraClasses).trim();
-        return '<svg ' + aria + ' class="' + classes + '"><use href="' + url + '"></use></svg>';
+        const classes = ("card-svg " + extraClasses).trim();
+        return (
+          '<svg ' +
+          aria +
+          ' class="' +
+          classes +
+          '" viewBox="0 0 169.075 244.640"><use href="' +
+          url +
+          '"></use></svg>'
+        );
       };
-      const renderEmptyCardSlot = () =>
-        '<div class="flex h-24 w-16 items-center justify-center rounded-xl border border-dashed border-emerald-200/50 sm:h-28 sm:w-20">' +
-        '<span class="text-xs text-emerald-200/70">Empty</span>' +
-        "</div>";
+      const renderEmptyCardSlot = (variant = "standalone") => {
+        const roundedClass = variant === "inset" ? "rounded-lg" : "rounded-xl";
+        return (
+          '<div class="card-slot flex h-full w-full items-center justify-center ' +
+          roundedClass +
+          ' border border-dashed border-emerald-200/50">' +
+          '<span class="text-xs text-emerald-200/70">Empty</span>' +
+          "</div>"
+        );
+      };
       const getFanLayout = (count) => {
         if (count <= 1) {
           return { positions: [50], rotations: [0] };
@@ -357,7 +381,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const createPlayerCardElement = (card, index, fanX, fanRot) => {
         const label = card.rank + " of " + card.suit;
         const wrapper = document.createElement("div");
-        wrapper.className = "player-card rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20";
+        wrapper.className =
+          "player-card h-24 w-16 rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20";
         wrapper.dataset.playerCard = "true";
         wrapper.dataset.cardIndex = String(index);
         wrapper.dataset.cardKey = cardKey(card);
@@ -371,7 +396,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
       const createOpponentCardElement = () => {
         const wrapper = document.createElement("div");
-        wrapper.className = "rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20";
+        wrapper.className = "h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20";
         wrapper.dataset.opponentCard = "true";
         wrapper.innerHTML = renderCardSvg(cardBackUrl, "Card back", "opacity-90");
         return wrapper;
@@ -543,7 +568,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         trumpContainer.dataset.trumpKey = nextKey;
         if (!nextTrumpCard) {
-          trumpContainer.innerHTML = renderEmptyCardSlot();
+          trumpContainer.innerHTML = renderEmptyCardSlot("inset");
           return;
         }
         const label = nextTrumpCard.rank + " of " + nextTrumpCard.suit;
@@ -563,7 +588,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         stockPile.innerHTML =
           nextCount > 0
             ? renderCardSvg(cardBackUrl, "Stock pile", "opacity-90")
-            : renderEmptyCardSlot();
+            : renderEmptyCardSlot("inset");
         if (stockCount) {
           stockCount.textContent = nextCount + " cards";
         }
