@@ -24,6 +24,7 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | GET | `/rooms/:code/lobby` | Host lobby view |
 | GET | `/rooms/:code/game` | Game page view |
 | GET | `/sse/:code` | SSE connection endpoint |
+| GET | `/public/*` | Static file serving (path-traversal protected) |
 
 ## Rooms
 
@@ -97,7 +98,7 @@ HTML rendering with HTMX integration and Tailwind CSS styling.
 
 ### Card Rendering
 
-SVG sprite-based card images via `svg-cards` CDN package.
+SVG sprite-based card images served locally from `/public/svg-cards.svg` (avoids cross-origin issues with CDN).
 
 - **Face cards**: `getCardImageUrl(card)` returns sprite URL for any Card
 - **Card backs**: `getCardBackUrl()` returns sprite URL for card back
@@ -113,6 +114,7 @@ Renders the interactive game board with viewer-specific perspective.
 - **Card fan**: Player cards arranged in arc with GSAP animation on page load
 - **Waiting state**: When not player's turn, cards shift down and desaturate; responds to window resize
 - **SSE connection**: Subscribes to `game-state` events for real-time updates
+- **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, and won pile displays without full page reload; uses GSAP animations for card additions/removals
 
 ## Game
 
