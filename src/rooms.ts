@@ -11,6 +11,7 @@ const ROOM_EXPIRED_RETENTION_MS = 60 * 60 * 1000;
 export type Room = {
   code: string;
   hostToken: string;
+  hostPlayerIndex: 0 | 1;
   hostConnected: boolean;
   guestConnected: boolean;
   guestEverJoined: boolean;
@@ -56,15 +57,17 @@ export function createRoom(): Room {
     const code = generateRoomCode();
     if (!rooms.has(code)) {
       const now = Date.now();
+      const matchState = initializeMatch();
       const room: Room = {
         code,
         hostToken: generateRoomToken(),
+        hostPlayerIndex: matchState.dealerIndex,
         hostConnected: false,
         guestConnected: false,
         guestEverJoined: false,
         lastActivity: now,
         createdAt: now,
-        matchState: initializeMatch(),
+        matchState,
       };
       rooms.set(code, room);
       expiredRooms.delete(code);

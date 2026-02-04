@@ -13,11 +13,16 @@ export function resolvePort(envPort: string | undefined): number {
   return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
 }
 
-function htmlResponse(body: string, status = 200): Response {
+function htmlResponse(
+  body: string,
+  status = 200,
+  headers: HeadersInit = {},
+): Response {
   return new Response(body, {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
+      ...headers,
     },
   });
 }
@@ -33,6 +38,50 @@ function resolveRoom(normalizedCode: string): RoomResolution {
     return { error: "Room expired. Start a new room.", status: 410 };
   }
   return { error: "Room not found. Double-check the code.", status: 404 };
+}
+
+function parseCookies(cookieHeader: string | null): Record<string, string> {
+  if (!cookieHeader) {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  const pairs = cookieHeader.split(";").map((entry) => entry.trim());
+  for (const pair of pairs) {
+    if (!pair) {
+      continue;
+    }
+    const separatorIndex = pair.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+    const name = pair.slice(0, separatorIndex).trim();
+    const value = pair.slice(separatorIndex + 1).trim();
+    if (!name) {
+      continue;
+    }
+    try {
+      result[name] = decodeURIComponent(value);
+    } catch {
+      result[name] = value;
+    }
+  }
+  return result;
+}
+
+function getHostCookieName(code: string): string {
+  return `hostToken-${code}`;
+}
+
+function resolveViewerIndex(request: Request, room: Room): 0 | 1 {
+  const url = new URL(request.url);
+  const tokenFromQuery = url.searchParams.get("hostToken");
+  const cookies = parseCookies(request.headers.get("cookie"));
+  const tokenFromCookie = cookies[getHostCookieName(room.code)];
+  const token = tokenFromQuery ?? tokenFromCookie;
+  if (token && token === room.hostToken) {
+    return room.hostPlayerIndex;
+  }
+  return room.hostPlayerIndex === 0 ? 1 : 0;
 }
 
 export function handleRequest(request: Request): Response {
@@ -87,12 +136,19 @@ export function handleRequest(request: Request): Response {
         );
       }
       touchRoom(normalizedCode);
+      const cookieName = getHostCookieName(resolution.room.code);
+      const cookieValue = encodeURIComponent(resolution.room.hostToken);
+      const cookiePath = `/rooms/${encodeURIComponent(resolution.room.code)}`;
       return htmlResponse(
         renderLobbyPage({
           code: resolution.room.code,
           isHost: true,
           hostToken: resolution.room.hostToken,
         }),
+        200,
+        {
+          "set-cookie": `${cookieName}=${cookieValue}; Path=${cookiePath}; SameSite=Lax; HttpOnly`,
+        },
       );
     }
 
@@ -107,7 +163,13 @@ export function handleRequest(request: Request): Response {
         );
       }
       touchRoom(normalizedCode);
-      return htmlResponse(renderGamePage({ code: resolution.room.code }));
+      return htmlResponse(
+        renderGamePage({
+          code: resolution.room.code,
+          matchState: resolution.room.matchState,
+          viewerIndex: resolveViewerIndex(request, resolution.room),
+        }),
+      );
     }
 
     const roomMatch = path.match(/^\/rooms\/([^/]+)$/);
