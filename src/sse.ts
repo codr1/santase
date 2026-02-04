@@ -56,6 +56,7 @@ function broadcast(roomCode: string, event: string, data: string): void {
 
 function startGame(roomCode: string): void {
   const destination = `/rooms/${encodeURIComponent(roomCode)}/game`;
+  console.log(`Game starting: ${roomCode}`);
   broadcast(roomCode, "game-start", destination);
 }
 
