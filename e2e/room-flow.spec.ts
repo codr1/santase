@@ -1,12 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
-
-// Playwright runs in Node, not Bun; guard so `bun test` doesn't treat this as a Bun test file.
+// Playwright runs in Node, not Bun; guard so `bun test` doesn't load Playwright.
 const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 
 if (!isBun) {
+  const { expect, test } = await import("@playwright/test");
   const baseUrl = "http://localhost:3001";
 
-  const createRoom = async (page: Page): Promise<string> => {
+  const createRoom = async (page: any): Promise<string> => {
     await page.goto(baseUrl);
     await page.getByRole("button", { name: "Create Room" }).click();
     await expect(page).toHaveURL(/\/rooms\/[A-Z0-9]+\/lobby$/);
@@ -17,7 +16,7 @@ if (!isBun) {
     return pathMatch ? pathMatch[1] : "";
   };
 
-  const assertRoomCodeShown = async (page: Page, roomCode: string): Promise<void> => {
+  const assertRoomCodeShown = async (page: any, roomCode: string): Promise<void> => {
     const roomCodeLocator = page.getByLabel(/Room code/i);
     await expect(roomCodeLocator).toBeVisible();
     const roomCodeText = await roomCodeLocator.textContent();
@@ -25,21 +24,21 @@ if (!isBun) {
     expect(roomCodeFromPage).toBe(roomCode);
   };
 
-  const joinRoom = async (page: Page, roomCode: string): Promise<void> => {
+  const joinRoom = async (page: any, roomCode: string): Promise<void> => {
     await page.goto(`${baseUrl}/join`);
     await page.getByLabel(/Room Code/i).fill(roomCode);
     await page.getByRole("button", { name: "Join Room" }).click();
     await expect(page).toHaveURL(new RegExp(`/rooms/${roomCode}$`));
   };
 
-  test("host can create a room", async ({ page }) => {
+  test("host can create a room", async ({ page }: { page: any }) => {
     const roomCodeFromUrl = await createRoom(page);
     await assertRoomCodeShown(page, roomCodeFromUrl);
 
     await expect(page.getByText("Waiting for opponent...")).toBeVisible();
   });
 
-  test("guest can join room", async ({ browser }) => {
+  test("guest can join room", async ({ browser }: { browser: any }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
 
@@ -58,7 +57,7 @@ if (!isBun) {
     }
   });
 
-  test("game auto-starts when guest joins via SSE", async ({ browser }) => {
+  test("SSE updates connection status", async ({ browser }: { browser: any }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
 
@@ -69,6 +68,28 @@ if (!isBun) {
       const guestPage = await guestContext.newPage();
 
       // Wait for both pages to navigate to game after guest joins
+      await joinRoom(guestPage, roomCode);
+
+      const hostStatus = hostPage.locator("#lobby-status");
+      const guestStatus = guestPage.locator("#lobby-status");
+
+      await expect(hostStatus).toContainText("Opponent connected");
+      await expect(guestStatus).toContainText("Opponent connected");
+    } finally {
+      await hostContext.close();
+      await guestContext.close();
+    }
+  });
+
+  test("both players redirect to game on guest join", async ({ browser }: { browser: any }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+
+    try {
+      const hostPage = await hostContext.newPage();
+      const roomCode = await createRoom(hostPage);
+
+      const guestPage = await guestContext.newPage();
       await Promise.all([
         hostPage.waitForURL(new RegExp(`/rooms/${roomCode}/game$`)),
         guestPage.waitForURL(new RegExp(`/rooms/${roomCode}/game$`)),
