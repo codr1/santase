@@ -321,7 +321,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
       const waitingFilter = "grayscale(0.45)";
       const waitingOpacity = 0.65;
-      const getWaitingOffset = () => Math.round(window.innerHeight * 0.33);
+      // ~10% of card height (h-24/h-28) to keep waiting cards lifted subtly.
+      const waitingOffsetPx = 11;
 
       const cardKey = (card) => card.rank + "-" + card.suit;
       const getCardImageUrl = (card) =>
@@ -387,7 +388,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
-        const waitingOffset = getWaitingOffset();
+        const waitingOffset = waitingOffsetPx;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -413,7 +414,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
-        const waitingOffset = getWaitingOffset();
+        const waitingOffset = waitingOffsetPx;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -606,7 +607,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const cards = Array.from(document.querySelectorAll("[data-player-card]"));
         const hand = document.querySelector("[data-player-hand]");
         const isWaiting = hand?.dataset.waiting === "true";
-        const waitingOffset = getWaitingOffset();
+        const waitingOffset = waitingOffsetPx;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -628,15 +629,6 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           );
         });
 
-        if (isWaiting) {
-          window.addEventListener("resize", () => {
-            const currentCards = Array.from(document.querySelectorAll("[data-player-card]"));
-            if (currentCards.length === 0) {
-              return;
-            }
-            window.gsap.set(currentCards, { y: getWaitingOffset() });
-          });
-        }
       });
       document.body.addEventListener("htmx:sseMessage", (event) => {
         const detail = event.detail || {};
