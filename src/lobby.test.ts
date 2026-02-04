@@ -93,7 +93,7 @@ describe("Lobby auto-start flow", () => {
     const guestResponse = handleSse(guestRequest, room.code);
     void guestResponse;
 
-    const guestConnectEvents = await readEvents(hostReader, 3);
+    const guestConnectEvents = await readEvents(hostReader, 4);
     const statusEvent = guestConnectEvents.find((event) => event.event === "status");
     expect(statusEvent?.data).toBe("<span>Opponent connected</span>");
 
