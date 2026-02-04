@@ -57,7 +57,6 @@ if (!isBun) {
     }
   });
 
-  test("game auto-starts when guest joins via SSE", async ({ browser }) => {
   test("SSE updates connection status", async ({ browser }: { browser: any }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
