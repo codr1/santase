@@ -238,11 +238,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               <div class="flex items-center gap-3 rounded-2xl bg-emerald-950/70 px-4 py-3 text-sm">
                 <div class="flex flex-col">
                   <span class="text-emerald-200/70">Won tricks</span>
-                  <span class="text-lg font-semibold">${opponentWonTricks}</span>
+                  <span class="text-lg font-semibold" data-opponent-won-tricks="true">${opponentWonTricks}</span>
                 </div>
                 <div class="flex flex-col">
                   <span class="text-emerald-200/70">Cards</span>
-                  <span class="text-lg font-semibold">${opponentWonCards}</span>
+                  <span class="text-lg font-semibold" data-opponent-won-cards="true">${opponentWonCards}</span>
                 </div>
                 <div class="flex h-24 w-16 items-center sm:h-28 sm:w-20" data-opponent-won-pile="true">
                   ${opponentWonPileMarkup}
@@ -322,11 +322,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               <div class="flex items-center gap-3 rounded-2xl bg-emerald-950/70 px-4 py-3 text-sm">
                 <div class="flex flex-col">
                   <span class="text-emerald-200/70">Won tricks</span>
-                  <span class="text-lg font-semibold">${playerWonTricks}</span>
+                  <span class="text-lg font-semibold" data-player-won-tricks="true">${playerWonTricks}</span>
                 </div>
                 <div class="flex flex-col">
                   <span class="text-emerald-200/70">Cards</span>
-                  <span class="text-lg font-semibold">${playerWonCards}</span>
+                  <span class="text-lg font-semibold" data-player-won-cards="true">${playerWonCards}</span>
                 </div>
                 <div class="flex h-24 w-16 items-center sm:h-28 sm:w-20" data-player-won-pile="true">
                   ${playerWonPileMarkup}
@@ -375,9 +375,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const waitingOpacity = 0.65;
       // ~10% of card height (h-24/h-28) to keep waiting cards lifted subtly.
       const waitingOffsetPx = 11;
+      const trickResolutionDelayMs = 1000;
+      const trickResolutionDuration = 0.6;
       let animationsSettled = true;
       let activeAnimations = 0;
       let playRequestPending = false;
+      let pendingTrickResolutionKey = null;
 
       const trackAnimations = (count) => {
         if (count <= 0) {
@@ -578,6 +581,21 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return false;
         }
         return left.every((card, index) => areCardsEqual(card, right[index]));
+      };
+      const getTrickKey = (trick) => {
+        if (!trick) {
+          return null;
+        }
+        const leader = trick.leaderCard;
+        const follower = trick.followerCard;
+        if (!leader || !follower) {
+          return null;
+        }
+        return [
+          trick.leaderIndex,
+          leader.rank + "-" + leader.suit,
+          follower.rank + "-" + follower.suit,
+        ].join("|");
       };
       const animateNewCards = (cards, isWaiting) => {
         if (!window.gsap || cards.length === 0) {
@@ -818,6 +836,136 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         animateIntoSlot(leaderSlot, leaderCard, "leader", leaderIndex);
         animateIntoSlot(followerSlot, followerCard, "follower", followerIndex);
       };
+      const clearTrickArea = () => {
+        const trickArea = document.querySelector("[data-trick-area]");
+        if (!trickArea) {
+          return;
+        }
+        const leaderSlot = trickArea.querySelector('[data-trick-position="leader"]');
+        const followerSlot = trickArea.querySelector('[data-trick-position="follower"]');
+        if (leaderSlot) {
+          leaderSlot.dataset.cardKey = "";
+          leaderSlot.innerHTML = renderEmptyCardSlot();
+        }
+        if (followerSlot) {
+          followerSlot.dataset.cardKey = "";
+          followerSlot.innerHTML = renderEmptyCardSlot();
+        }
+      };
+      const detectTrickResolution = (prevGame, nextGame) => {
+        if (!prevGame?.currentTrick || !nextGame || nextGame.currentTrick) {
+          return null;
+        }
+        if (!prevGame.currentTrick.followerCard) {
+          return null;
+        }
+        const nextTrick = nextGame.lastCompletedTrick;
+        if (!nextTrick?.followerCard) {
+          return null;
+        }
+        const prevWon = prevGame.wonTricks;
+        const nextWon = nextGame.wonTricks;
+        if (!prevWon || !nextWon) {
+          return null;
+        }
+        const playerDelta = nextWon[viewerIndex].length - prevWon[viewerIndex].length;
+        const opponentDelta = nextWon[opponentIndex].length - prevWon[opponentIndex].length;
+        if (playerDelta <= 0 && opponentDelta <= 0) {
+          return null;
+        }
+        if (playerDelta > 0 && opponentDelta > 0) {
+          return null;
+        }
+        const winnerIndex = playerDelta > 0 ? viewerIndex : opponentIndex;
+        return { trick: nextTrick, winnerIndex };
+      };
+      const animateTrickResolution = (trick, winnerIndex) => {
+        if (!trick) {
+          return;
+        }
+        const trickKeyValue = getTrickKey(trick);
+        if (!trickKeyValue) {
+          return;
+        }
+        pendingTrickResolutionKey = trickKeyValue;
+        window.setTimeout(() => {
+          if (pendingTrickResolutionKey !== trickKeyValue) {
+            return;
+          }
+          const latestGame = currentState?.game;
+          if (latestGame?.currentTrick) {
+            return;
+          }
+          if (getTrickKey(latestGame?.lastCompletedTrick) !== trickKeyValue) {
+            return;
+          }
+          const trickArea = document.querySelector("[data-trick-area]");
+          if (!trickArea) {
+            return;
+          }
+          const leaderSlot = trickArea.querySelector('[data-trick-position="leader"]');
+          const followerSlot = trickArea.querySelector('[data-trick-position="follower"]');
+          const leaderCard = leaderSlot?.querySelector("[data-trick-card]");
+          const followerCard = followerSlot?.querySelector("[data-trick-card]");
+          if (!leaderCard || !followerCard) {
+            clearTrickArea();
+            pendingTrickResolutionKey = null;
+            return;
+          }
+          const winnerPileSelector =
+            winnerIndex === viewerIndex ? "[data-player-won-pile]" : "[data-opponent-won-pile]";
+          const winnerPile = document.querySelector(winnerPileSelector);
+          if (!winnerPile || !window.gsap) {
+            pendingTrickResolutionKey = null;
+            return;
+          }
+          const pileRect = winnerPile.getBoundingClientRect();
+          const cards = [leaderCard, followerCard];
+          const completeAnimation = trackAnimations(cards.length);
+          let completed = 0;
+          cards.forEach((cardEl) => {
+            const cardRect = cardEl.getBoundingClientRect();
+            const clone = cardEl.cloneNode(true);
+            if (!(clone instanceof HTMLElement)) {
+              completed += 1;
+              if (completed === cards.length) {
+                clearTrickArea();
+              }
+              completeAnimation();
+              return;
+            }
+            clone.style.position = "fixed";
+            clone.style.left = cardRect.left + "px";
+            clone.style.top = cardRect.top + "px";
+            clone.style.width = cardRect.width + "px";
+            clone.style.height = cardRect.height + "px";
+            clone.style.margin = "0";
+            clone.style.zIndex = "50";
+            clone.style.pointerEvents = "none";
+            clone.style.transformOrigin = "center center";
+            document.body.appendChild(clone);
+            const deltaX = pileRect.left - cardRect.left + (pileRect.width - cardRect.width) / 2;
+            const deltaY = pileRect.top - cardRect.top + (pileRect.height - cardRect.height) / 2;
+            window.gsap.to(clone, {
+              x: deltaX,
+              y: deltaY,
+              scale: 0.3,
+              opacity: 0.2,
+              duration: trickResolutionDuration,
+              ease: "power3.in",
+              onComplete: () => {
+                clone.remove();
+                completed += 1;
+                if (completed === cards.length) {
+                  clearTrickArea();
+                  pendingTrickResolutionKey = null;
+                }
+                completeAnimation();
+              },
+            });
+          });
+        }, trickResolutionDelayMs);
+      };
       const updateTrumpCard = (nextTrumpCard) => {
         const trumpContainer = document.querySelector("[data-trump-card]");
         if (!trumpContainer) {
@@ -865,6 +1013,21 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         pile.dataset.wonCount = String(nextCount);
         pile.innerHTML = nextCount > 0 ? renderCardSvg(cardBackUrl, label, "opacity-80") : "";
+      };
+      const updateWonCounts = (playerIndexValue, wonCards) => {
+        const wonTricks = Math.floor(wonCards / 2);
+        const trickSelector =
+          playerIndexValue === viewerIndex ? "[data-player-won-tricks]" : "[data-opponent-won-tricks]";
+        const cardSelector =
+          playerIndexValue === viewerIndex ? "[data-player-won-cards]" : "[data-opponent-won-cards]";
+        const trickEl = document.querySelector(trickSelector);
+        if (trickEl) {
+          trickEl.textContent = String(wonTricks);
+        }
+        const cardEl = document.querySelector(cardSelector);
+        if (cardEl) {
+          cardEl.textContent = String(wonCards);
+        }
       };
 
       const trumpContainer = document.querySelector("[data-trump-card]");
@@ -992,6 +1155,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         ) {
           updateTrickArea(nextGame, currentGame);
         }
+        const trickResolution = currentGame ? detectTrickResolution(currentGame, nextGame) : null;
+        if (trickResolution) {
+          animateTrickResolution(trickResolution.trick, trickResolution.winnerIndex);
+        }
 
         const nextActivePlayer = getActivePlayerIndex(nextGame);
         const currentActivePlayer = getActivePlayerIndex(currentGame);
@@ -1018,19 +1185,26 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           updateStockPile(nextGame.stock.length);
         }
 
-        if (!currentGame || currentGame.wonTricks[viewerIndex].length !== nextGame.wonTricks[viewerIndex].length) {
-          updateWonPile("[data-player-won-pile]", nextGame.wonTricks[viewerIndex].length, "Your won pile");
+        if (
+          !currentGame ||
+          currentGame.wonTricks[viewerIndex].length !== nextGame.wonTricks[viewerIndex].length
+        ) {
+          const nextCount = nextGame.wonTricks[viewerIndex].length;
+          updateWonPile("[data-player-won-pile]", nextCount, "Your won pile");
+          updateWonCounts(viewerIndex, nextCount);
         }
 
         if (
           !currentGame ||
           currentGame.wonTricks[opponentIndex].length !== nextGame.wonTricks[opponentIndex].length
         ) {
+          const nextCount = nextGame.wonTricks[opponentIndex].length;
           updateWonPile(
             "[data-opponent-won-pile]",
-            nextGame.wonTricks[opponentIndex].length,
+            nextCount,
             "Opponent won pile",
           );
+          updateWonCounts(opponentIndex, nextCount);
         }
 
         currentState = parsedState;
