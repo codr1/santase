@@ -24,6 +24,7 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | GET | `/rooms/:code/lobby` | Host lobby view |
 | GET | `/rooms/:code/game` | Game page view |
 | POST | `/rooms/:code/play` | Play a card (JSON body: `{card, marriageSuit?}`) |
+| POST | `/rooms/:code/exchange-trump` | Exchange trump 9 for the trump card |
 | GET | `/sse/:code` | SSE connection endpoint |
 | GET | `/public/*` | Static file serving (path-traversal protected) |
 
@@ -126,6 +127,27 @@ Player index determined by `hostToken` query param or `hostToken-{code}` cookie 
 - Ends round when hands exhausted (awards game points based on scores or closer penalty)
 - Broadcasts `game-state` to all connected clients
 
+## Exchange Trump Endpoint
+
+`POST /rooms/:code/exchange-trump` allows the leader to swap the trump 9 in their hand for the face-up trump card.
+
+### Player Resolution
+
+Same as play endpoint (hostToken query param or cookie).
+
+### Responses
+
+| Status | Condition |
+|--------|-----------|
+| 200 | Exchange successful |
+| 409 | Not the leader, exchange not allowed (missing trump 9, stock too small, trick in progress), round/match already ended |
+
+### Behavior
+
+- Validates player is the leader and `canExchangeTrump9` passes
+- Swaps trump 9 in hand with the trump card
+- Broadcasts `game-state` to all connected clients
+
 ## Templates
 
 HTML rendering with HTMX integration and Tailwind CSS styling.
@@ -153,7 +175,12 @@ Renders the interactive game board with viewer-specific perspective.
 - **Card fan**: Player cards arranged in arc with GSAP animation on page load
 - **Waiting state**: When not player's turn, cards shift down and desaturate
 - **SSE connection**: Subscribes to `game-state` events for real-time updates
-- **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, and won pile displays without full page reload; uses GSAP animations for card additions/removals
+- **Current trick display**: Shows leader and follower cards in the trick area; cards animate from source hand to trick slot using GSAP; displays status text ("Waiting for response", "Last trick complete", or "No cards played yet")
+- **Trick resolution animation**: When a trick completes, cards pause briefly (1s) then animate to the winner's won pile with scale-down and fade-out
+- **Stock pile stacking**: Stock cards render as layered card backs (1 layer per 4 cards) with vertical offset for depth effect
+- **Won trick/card counters**: Numeric displays for each player's won tricks and won card counts, updated in real-time
+- **Trump 9 exchange button**: Shown when the player can exchange (is leader, holds trump 9, stock has 3+ cards, no trick in progress); sends POST to `/rooms/:code/exchange-trump`; optimistically updates hand and trump card
+- **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, won pile displays, trick area, and won counters without full page reload; uses GSAP animations for card additions/removals
 - **Click-to-play**: Player cards are clickable when it's the player's turn; clicking sends POST to `/rooms/:code/play`; automatically declares marriage when leading with K or Q of a declareable suit
 
 ## Game
@@ -196,6 +223,7 @@ type GameState = {
   isClosed: boolean;
   leader: 0 | 1;
   currentTrick: { leaderIndex: 0 | 1; leaderCard: Card } | null;
+  lastCompletedTrick: { leaderIndex: 0 | 1; leaderCard: Card; followerCard: Card } | null;
   closedBy: 0 | 1 | null;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
@@ -226,7 +254,7 @@ type RoundResult = {
 - `findDeclareableMarriages(state, playerIndex)`: Returns array of suits player can declare
 - `declareMarriage(state, playerIndex, suit)`: Returns new GameState with marriage declared and points added
 - `isDeckClosedOrExhausted(state)`: Returns true if deck is closed or stock is empty
-- `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; enforces follow-suit rules when deck is closed/exhausted; returns new GameState
+- `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; sets `lastCompletedTrick` and clears `currentTrick`; enforces follow-suit rules when deck is closed/exhausted; returns new GameState
 - `drawFromStock(state, winnerIndex)`: After a trick, winner draws top stock card, loser draws next (or trump card on final draw); sets trumpCard to null when exhausted; no-op if stock empty
 - `getValidFollowerCards(hand, ledCard, trumpSuit, deckClosedOrExhausted)`: Returns valid cards follower can play; when deck is closed/exhausted, must head in led suit if possible, else play any led suit card, else play trump, else any card
 
