@@ -17,6 +17,8 @@ const SUIT_SYMBOLS: Record<Suit, { symbolHtml: string; label: string; colorClass
   clubs: { symbolHtml: "&clubs;", label: "Clubs", colorClass: "text-emerald-200" },
   spades: { symbolHtml: "&spades;", label: "Spades", colorClass: "text-slate-200" },
 };
+const STOCK_PILE_CARDS_PER_LAYER = 4;
+const STOCK_PILE_OFFSET_PX = 2;
 
 function renderCardSvg(url: string, label?: string, extraClasses = ""): string {
   const aria = label
@@ -89,6 +91,25 @@ function renderEmptyCardSlot(variant: "standalone" | "inset" = "standalone"): st
   </div>`;
 }
 
+function getStockPileLayers(count: number): number {
+  return Math.max(0, Math.ceil(count / STOCK_PILE_CARDS_PER_LAYER));
+}
+
+function renderStockPile(count: number): string {
+  if (count <= 0) {
+    return renderEmptyCardSlot("inset");
+  }
+  const layers = getStockPileLayers(count);
+  const stack = Array.from({ length: layers }, (_, index) => {
+    const offset = (layers - 1 - index) * STOCK_PILE_OFFSET_PX;
+    const isTop = index === layers - 1;
+    return `<div class="absolute inset-0 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" style="transform: translateY(${offset}px); z-index:${index};">
+      ${renderCardSvg(getCardBackUrl(), isTop ? "Stock pile" : undefined, "opacity-90")}
+    </div>`;
+  }).join("");
+  return `<div class="relative h-full w-full" data-stock-stack="true">${stack}</div>`;
+}
+
 function renderTrickCard(card: Card, role: "leader" | "follower"): string {
   const label = `${card.rank} of ${card.suit}`;
   const rotation = role === "leader" ? -5 : 5;
@@ -158,10 +179,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
     : renderEmptyCardSlot("inset");
   const stockCount = stock.length;
-  const stockPileMarkup =
-    stockCount > 0
-      ? renderCardSvg(getCardBackUrl(), "Stock pile", "opacity-90")
-      : renderEmptyCardSlot("inset");
+  const stockPileMarkup = renderStockPile(stockCount);
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -304,7 +322,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                 </div>
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Stock</span>
-                  <div class="h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20" data-stock-pile="true">
+                  <div class="relative h-24 w-16 sm:h-28 sm:w-20" data-stock-pile="true">
                     ${stockPileMarkup}
                   </div>
                   <span class="text-sm font-semibold" data-stock-count="true">${stockCount} cards</span>
@@ -357,6 +375,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
       const cardBackUrl = svgCardsCdn + "#back";
+      const stockPileCardsPerLayer = 4;
+      const stockPileOffsetPx = 2;
       const suitIds = {
         hearts: "heart",
         diamonds: "diamond",
@@ -434,6 +454,27 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           '<span class="text-xs text-emerald-200/70">Empty</span>' +
           "</div>"
         );
+      };
+      const getStockPileLayers = (count) => Math.max(0, Math.ceil(count / stockPileCardsPerLayer));
+      const renderStockPile = (count) => {
+        if (count <= 0) {
+          return renderEmptyCardSlot("inset");
+        }
+        const layers = getStockPileLayers(count);
+        let markup = '<div class="relative h-full w-full" data-stock-stack="true">';
+        for (let index = 0; index < layers; index += 1) {
+          const offset = (layers - 1 - index) * stockPileOffsetPx;
+          const label = index === layers - 1 ? "Stock pile" : "";
+          markup +=
+            '<div class="absolute inset-0 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" style="transform: translateY(' +
+            offset +
+            "px); z-index:" +
+            index +
+            ';">' +
+            renderCardSvg(cardBackUrl, label, "opacity-90") +
+            "</div>";
+        }
+        return markup + "</div>";
       };
       const createTrickCardElement = (card, role) => {
         const label = card.rank + " of " + card.suit;
@@ -994,10 +1035,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return;
         }
         stockPile.dataset.stockCount = String(nextCount);
-        stockPile.innerHTML =
-          nextCount > 0
-            ? renderCardSvg(cardBackUrl, "Stock pile", "opacity-90")
-            : renderEmptyCardSlot("inset");
+        stockPile.innerHTML = renderStockPile(nextCount);
         if (stockCount) {
           stockCount.textContent = nextCount + " cards";
         }
