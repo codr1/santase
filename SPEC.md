@@ -23,6 +23,7 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | GET | `/rooms/:code` | Guest lobby view |
 | GET | `/rooms/:code/lobby` | Host lobby view |
 | GET | `/rooms/:code/game` | Game page view |
+| POST | `/rooms/:code/play` | Play a card (JSON body: `{card, marriageSuit?}`) |
 | GET | `/sse/:code` | SSE connection endpoint |
 | GET | `/public/*` | Static file serving (path-traversal protected) |
 
@@ -87,6 +88,44 @@ Server-Sent Events for real-time communication.
 | `game-start` | all | Game URL path for redirect |
 | `game-state` | all | JSON-serialized `MatchState` for real-time updates |
 
+## Play Endpoint
+
+`POST /rooms/:code/play` handles card plays during a game.
+
+### Request
+
+```typescript
+{
+  card: { suit: Suit; rank: Rank };
+  marriageSuit?: Suit;  // optional, declares marriage when leading
+}
+```
+
+### Player Resolution
+
+Player index determined by `hostToken` query param or `hostToken-{code}` cookie (same as game page viewer).
+
+### Turn Logic
+
+- **Leading**: When `currentTrick` is null, the `leader` plays first
+- **Following**: When `currentTrick` exists, the opponent of `leaderIndex` plays
+
+### Responses
+
+| Status | Condition |
+|--------|-----------|
+| 200 | Card played successfully |
+| 400 | Invalid payload, card not in hand, invalid follower card, invalid marriage |
+| 409 | Not your turn, round/match already ended |
+
+### Behavior
+
+- Validates card is in player's hand
+- For leader: sets `currentTrick` with played card; processes marriage if declared
+- For follower: enforces follow-suit rules when deck is closed/exhausted; resolves trick winner, awards points, triggers draw from stock
+- Ends round when hands exhausted (awards game points based on scores or closer penalty)
+- Broadcasts `game-state` to all connected clients
+
 ## Templates
 
 HTML rendering with HTMX integration and Tailwind CSS styling.
@@ -112,9 +151,10 @@ Renders the interactive game board with viewer-specific perspective.
 - **Host cookie**: Set on lobby page load with `Path=/rooms/{code}; SameSite=Lax; HttpOnly`
 - **Layout sections**: Opponent hand (face-down), scores panel, current trick area, trump/stock display, player hand (face-up fan)
 - **Card fan**: Player cards arranged in arc with GSAP animation on page load
-- **Waiting state**: When not player's turn, cards shift down and desaturate; responds to window resize
+- **Waiting state**: When not player's turn, cards shift down and desaturate
 - **SSE connection**: Subscribes to `game-state` events for real-time updates
 - **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, and won pile displays without full page reload; uses GSAP animations for card additions/removals
+- **Click-to-play**: Player cards are clickable when it's the player's turn; clicking sends POST to `/rooms/:code/play`; automatically declares marriage when leading with K or Q of a declareable suit
 
 ## Game
 
@@ -155,6 +195,7 @@ type GameState = {
   trumpSuit: Suit;
   isClosed: boolean;
   leader: 0 | 1;
+  currentTrick: { leaderIndex: 0 | 1; leaderCard: Card } | null;
   closedBy: 0 | 1 | null;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
