@@ -611,6 +611,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!game) {
           return false;
         }
+        if (game.currentTrick) {
+          return false;
+        }
         if (game.leader !== playerIndex) {
           return false;
         }

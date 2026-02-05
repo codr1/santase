@@ -810,6 +810,20 @@ describe("canExchangeTrump9", () => {
     expect(canExchangeTrump9(state, 0)).toBe(false);
   });
 
+  test("returns false when leader has already started the trick", () => {
+    const state = makeState(
+      [[{ suit: "spades", rank: "9" }], []],
+      [],
+      { stock: createDeck().slice(0, 4), trumpSuit: "spades", leader: 0 },
+    );
+    state.currentTrick = {
+      leaderIndex: 0,
+      leaderCard: { suit: "hearts", rank: "A" },
+    };
+
+    expect(canExchangeTrump9(state, 0)).toBe(false);
+  });
+
   test("returns true when all conditions are met", () => {
     const state = makeState(
       [[{ suit: "spades", rank: "9" }], []],

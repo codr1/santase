@@ -219,7 +219,7 @@ type RoundResult = {
 - `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 3 game points
 - `calculateGamePoints(opponentScore)`: Returns game points based on opponent score: 3 if 0, 2 if 1-32, 1 if ≥33
 - `calculateWinPoints(state, closerIndex?)`: Returns win points for the round; if closer loses, returns 3 (penalty); otherwise uses calculateGamePoints
-- `canExchangeTrump9(state, playerIndex)`: Returns true when player is leader, stock has 3+ cards, trump card is available, and player holds trump 9
+- `canExchangeTrump9(state, playerIndex)`: Returns true when no trick is in progress, player is leader, stock has 3+ cards, trump card is available, and player holds trump 9
 - `exchangeTrump9(state, playerIndex)`: Swaps trump 9 in hand with trump card; throws when exchange not allowed
 - `hasPotentialMarriage(hand, suit)`: Returns true if hand contains K and Q of suit
 - `canDeclareMarriage(state, playerIndex, suit)`: Returns true if player can declare marriage (has K+Q and suit not already declared)

@@ -295,6 +295,10 @@ export function calculateWinPoints(
 }
 
 export function canExchangeTrump9(state: GameState, playerIndex: 0 | 1): boolean {
+  if (state.currentTrick) {
+    return false;
+  }
+
   if (state.leader !== playerIndex) {
     return false;
   }
