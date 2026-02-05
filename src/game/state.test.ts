@@ -810,6 +810,20 @@ describe("canExchangeTrump9", () => {
     expect(canExchangeTrump9(state, 0)).toBe(false);
   });
 
+  test("returns false when leader has already started the trick", () => {
+    const state = makeState(
+      [[{ suit: "spades", rank: "9" }], []],
+      [],
+      { stock: createDeck().slice(0, 4), trumpSuit: "spades", leader: 0 },
+    );
+    state.currentTrick = {
+      leaderIndex: 0,
+      leaderCard: { suit: "hearts", rank: "A" },
+    };
+
+    expect(canExchangeTrump9(state, 0)).toBe(false);
+  });
+
   test("returns true when all conditions are met", () => {
     const state = makeState(
       [[{ suit: "spades", rank: "9" }], []],
@@ -963,6 +977,7 @@ function makeState(
     leader: overrides.leader ?? 0,
     isClosed: false,
     currentTrick: null,
+    lastCompletedTrick: null,
     closedBy: null,
     wonTricks: [[], []],
     roundScores: [0, 0],
@@ -991,6 +1006,7 @@ function makeTrickState({
     trumpSuit,
     isClosed,
     currentTrick: null,
+    lastCompletedTrick: null,
     closedBy: null,
     wonTricks: [[], []],
     roundScores: [0, 0],
@@ -1331,6 +1347,8 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
       closedBy: null,
       wonTricks: [[], []],
       roundScores: [0, 0],
@@ -1353,6 +1371,11 @@ describe("playTrick", () => {
     ]);
     expect(nextState.wonTricks[1]).toEqual([]);
     expect(nextState.roundScores).toEqual([11, 0]);
+    expect(nextState.lastCompletedTrick).toEqual({
+      leaderIndex: 0,
+      leaderCard: { suit: "hearts", rank: "A" },
+      followerCard: { suit: "hearts", rank: "9" },
+    });
   });
 
   test("accumulates scores and appends to existing won tricks", () => {
@@ -1363,6 +1386,8 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
       closedBy: null,
       wonTricks: [
         [{ suit: "clubs", rank: "K" }],
@@ -1389,6 +1414,11 @@ describe("playTrick", () => {
     ]);
     expect(nextState.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
     expect(nextState.roundScores).toEqual([20, 5]);
+    expect(nextState.lastCompletedTrick).toEqual({
+      leaderIndex: 1,
+      leaderCard: { suit: "hearts", rank: "10" },
+      followerCard: { suit: "spades", rank: "9" },
+    });
   });
 
   test("throws when the leader card is not in hand", () => {
@@ -1399,6 +1429,8 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
       closedBy: null,
       wonTricks: [[], []],
       roundScores: [0, 0],
@@ -1424,6 +1456,8 @@ describe("playTrick", () => {
       trumpSuit: "spades",
       isClosed: false,
       leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
       closedBy: null,
       wonTricks: [[], []],
       roundScores: [0, 0],

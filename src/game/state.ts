@@ -40,6 +40,7 @@ export type GameState = {
   isClosed: boolean;
   leader: 0 | 1;
   currentTrick: { leaderIndex: 0 | 1; leaderCard: Card } | null;
+  lastCompletedTrick: { leaderIndex: 0 | 1; leaderCard: Card; followerCard: Card } | null;
   closedBy: 0 | 1 | null;
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
@@ -178,6 +179,7 @@ export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1 = 0): GameStat
     isClosed: false,
     leader,
     currentTrick: null,
+    lastCompletedTrick: null,
     closedBy: null,
     wonTricks: [[], []],
     roundScores: [0, 0],
@@ -293,6 +295,10 @@ export function calculateWinPoints(
 }
 
 export function canExchangeTrump9(state: GameState, playerIndex: 0 | 1): boolean {
+  if (state.currentTrick) {
+    return false;
+  }
+
   if (state.leader !== playerIndex) {
     return false;
   }
@@ -478,6 +484,8 @@ export function playTrick(
     leader: nextLeader,
     wonTricks: nextWonTricks,
     roundScores: nextRoundScores,
+    currentTrick: null,
+    lastCompletedTrick: { leaderIndex, leaderCard, followerCard },
   };
 }
 
