@@ -11,9 +11,11 @@ import {
   CARD_POINTS,
   calculateGamePoints,
   canDeclareMarriage,
+  canExchangeTrump9,
   compareTrick,
   declareMarriage,
   drawFromStock,
+  exchangeTrump9,
   getValidFollowerCards,
   isMatchOver,
   type Card,
@@ -188,6 +190,35 @@ export async function handleRequest(request: Request): Promise<Response> {
   }
 
   if (request.method === "POST") {
+    const exchangeMatch = path.match(/^\/rooms\/([^/]+)\/exchange-trump$/);
+    if (exchangeMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(exchangeMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return jsonError(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      const playerIndex = resolveViewerIndex(request, room);
+      const game = room.matchState.game;
+      if (isMatchOver(room.matchState)) {
+        return jsonError("Match already ended.", 409);
+      }
+      if (game.roundResult) {
+        return jsonError("Round already ended.", 409);
+      }
+      if (game.leader !== playerIndex) {
+        return jsonError("Only the leader can exchange the trump 9.", 409);
+      }
+      if (!canExchangeTrump9(game, playerIndex)) {
+        return jsonError("Trump 9 exchange not allowed.", 409);
+      }
+      const nextGame = exchangeTrump9(game, playerIndex);
+      room.matchState = { ...room.matchState, game: nextGame };
+      touchRoom(normalizedCode);
+      broadcastGameState(normalizedCode, room.matchState);
+      return jsonResponse({ ok: true }, 200);
+    }
+
     const playMatch = path.match(/^\/rooms\/([^/]+)\/play$/);
     if (playMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(playMatch[1]));

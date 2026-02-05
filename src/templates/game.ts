@@ -1,6 +1,7 @@
 import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import { getCardBackUrl, getCardImageUrl } from "./cards";
+import { canExchangeTrump9 } from "../game";
 import type { Card, Suit } from "../game/cards";
 import type { MatchState } from "../game/state";
 
@@ -180,6 +181,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
     : renderEmptyCardSlot("inset");
   const stockCount = stock.length;
   const stockPileMarkup = renderStockPile(stockCount);
+  const canExchangeTrump = canExchangeTrump9(matchState.game, playerIndex);
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -328,6 +330,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   <span class="text-sm font-semibold" data-stock-count="true">${stockCount} cards</span>
                 </div>
               </div>
+              <div class="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+                  data-exchange-trump="true"
+                  ${canExchangeTrump ? "" : "hidden"}
+                >
+                  Exchange trump 9
+                </button>
+              </div>
             </div>
           </div>
 
@@ -400,6 +412,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let animationsSettled = true;
       let activeAnimations = 0;
       let playRequestPending = false;
+      let exchangeRequestPending = false;
       let pendingTrickResolutionKey = null;
 
       const trackAnimations = (count) => {
@@ -593,6 +606,23 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const getDisplayTrick = (game) => game?.currentTrick ?? game?.lastCompletedTrick ?? null;
       const isPlayerTurn = (state, playerIndex) =>
         getActivePlayerIndex(state?.game) === playerIndex;
+      const canExchangeTrump9State = (state, playerIndex) => {
+        const game = state?.game;
+        if (!game) {
+          return false;
+        }
+        if (game.leader !== playerIndex) {
+          return false;
+        }
+        if (!game.trumpCard) {
+          return false;
+        }
+        if (!Array.isArray(game.stock) || game.stock.length <= 2) {
+          return false;
+        }
+        const hand = game.playerHands?.[playerIndex] ?? [];
+        return hand.some((card) => card.rank === "9" && card.suit === game.trumpSuit);
+      };
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
       const areOptionalCardsEqual = (left, right) => {
@@ -637,6 +667,44 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           leader.rank + "-" + leader.suit,
           follower.rank + "-" + follower.suit,
         ].join("|");
+      };
+      const applyExchangeTrump9 = (state, playerIndex) => {
+        if (!canExchangeTrump9State(state, playerIndex)) {
+          return state;
+        }
+        const game = state.game;
+        const hand = game.playerHands[playerIndex];
+        const trumpIndex = hand.findIndex(
+          (card) => card.rank === "9" && card.suit === game.trumpSuit,
+        );
+        if (trumpIndex < 0 || !game.trumpCard) {
+          return state;
+        }
+        const trump9 = hand[trumpIndex];
+        const nextHand = [
+          ...hand.slice(0, trumpIndex),
+          ...hand.slice(trumpIndex + 1),
+          game.trumpCard,
+        ];
+        const nextHands =
+          playerIndex === 0 ? [nextHand, game.playerHands[1]] : [game.playerHands[0], nextHand];
+        return {
+          ...state,
+          game: {
+            ...game,
+            playerHands: nextHands,
+            trumpCard: trump9,
+          },
+        };
+      };
+      const updateExchangeTrumpButton = (state) => {
+        const button = document.querySelector("[data-exchange-trump]");
+        if (!button) {
+          return;
+        }
+        const canExchange = canExchangeTrump9State(state, viewerIndex);
+        button.hidden = !canExchange;
+        button.disabled = !canExchange || exchangeRequestPending;
       };
       const animateNewCards = (cards, isWaiting) => {
         if (!window.gsap || cards.length === 0) {
@@ -1138,6 +1206,45 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             }
           });
         }
+        const exchangeButton = document.querySelector("[data-exchange-trump]");
+        if (exchangeButton) {
+          exchangeButton.addEventListener("click", async () => {
+            if (exchangeRequestPending) {
+              return;
+            }
+            if (!canExchangeTrump9State(currentState, viewerIndex)) {
+              return;
+            }
+            exchangeRequestPending = true;
+            updateExchangeTrumpButton(currentState);
+            try {
+              const response = await fetch(
+                "/rooms/" + encodeURIComponent(roomCode) + "/exchange-trump",
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                },
+              );
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                console.warn("Trump exchange rejected", response.status, errorText);
+              } else {
+                const nextState = applyExchangeTrump9(currentState, viewerIndex);
+                if (nextState !== currentState) {
+                  updatePlayerHand(nextState.game.playerHands[viewerIndex], nextState.game);
+                  updateTrumpCard(nextState.game.trumpCard);
+                  currentState = nextState;
+                }
+              }
+            } catch (error) {
+              console.warn("Failed to exchange trump 9", error);
+            } finally {
+              exchangeRequestPending = false;
+              updateExchangeTrumpButton(currentState);
+            }
+          });
+        }
+        updateExchangeTrumpButton(currentState);
         if (!window.gsap) {
           return;
         }
@@ -1244,6 +1351,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           );
           updateWonCounts(opponentIndex, nextCount);
         }
+
+        updateExchangeTrumpButton(parsedState);
 
         currentState = parsedState;
       });

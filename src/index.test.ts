@@ -56,6 +56,15 @@ const postPlay = async (roomCode: string, payload: unknown, asHost: boolean) => 
   );
 };
 
+const postExchangeTrump = async (roomCode: string, asHost: boolean) => {
+  const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
+  return handleRequest(
+    new Request(`http://example/rooms/${roomCode}/exchange-trump${hostQuery}`, {
+      method: "POST",
+    }),
+  );
+};
+
 describe("resolvePort", () => {
   test("defaults to 3000 when env var is missing", () => {
     expect(resolvePort(undefined)).toBe(3000);
@@ -278,6 +287,109 @@ describe("play endpoint", () => {
       expect(nextGame.roundResult?.reason).toBe("closed_failed");
       expect(nextGame.roundResult?.winner).toBe(1);
       expect(room.matchState.matchScores).toEqual([0, 3]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
+describe("exchange trump endpoint", () => {
+  test("exchanges the trump 9 for the trump card when allowed", async () => {
+    const trumpNine: Card = { suit: "hearts", rank: "9" };
+    const trumpCard: Card = { suit: "hearts", rank: "A" };
+    const game = buildGameState({
+      playerHands: [[trumpNine], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard,
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postExchangeTrump(room.code, true);
+      expect(response.status).toBe(200);
+
+      const nextGame = room.matchState.game;
+      expect(nextGame.trumpCard).toEqual(trumpNine);
+      expect(nextGame.playerHands[0]).toEqual([trumpCard]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects an exchange attempt from the non-leader", async () => {
+    const trumpNine: Card = { suit: "hearts", rank: "9" };
+    const game = buildGameState({
+      playerHands: [[trumpNine], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "A" },
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postExchangeTrump(room.code, false);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.trumpCard).toEqual({ suit: "hearts", rank: "A" });
+      expect(room.matchState.game.playerHands[0]).toEqual([trumpNine]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects an exchange attempt when the leader lacks the trump 9", async () => {
+    const game = buildGameState({
+      playerHands: [[{ suit: "hearts", rank: "K" }], [{ suit: "spades", rank: "9" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "A" },
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postExchangeTrump(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.trumpCard).toEqual({ suit: "hearts", rank: "A" });
+      expect(room.matchState.game.playerHands[0]).toEqual([{ suit: "hearts", rank: "K" }]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects an exchange attempt when the stock is too small", async () => {
+    const trumpNine: Card = { suit: "hearts", rank: "9" };
+    const game = buildGameState({
+      playerHands: [[trumpNine], [{ suit: "spades", rank: "9" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+      ],
+      trumpCard: { suit: "hearts", rank: "A" },
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postExchangeTrump(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.trumpCard).toEqual({ suit: "hearts", rank: "A" });
+      expect(room.matchState.game.playerHands[0]).toEqual([trumpNine]);
     } finally {
       deleteRoom(room.code);
     }
