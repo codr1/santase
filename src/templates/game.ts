@@ -22,9 +22,9 @@ function renderCardSvg(url: string, label?: string, extraClasses = ""): string {
   const aria = label
     ? `role="img" aria-label="${escapeHtml(label)}"`
     : `aria-hidden="true"`;
-  const classes = `h-24 w-16 sm:h-28 sm:w-20 ${extraClasses}`.trim();
+  const classes = `card-svg ${extraClasses}`.trim();
   return `
-    <svg ${aria} class="${classes}">
+    <svg ${aria} class="${classes}" viewBox="0 0 169.075 244.640">
       <use href="${url}"></use>
     </svg>
   `;
@@ -38,7 +38,7 @@ function renderFaceUpCards(cards: Card[]): string {
       const fanX = fanLayout.positions[index] ?? 50;
       const fanRot = fanLayout.rotations[index] ?? 0;
       return `<div
-        class="player-card rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20"
+        class="player-card h-24 w-16 rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20"
         data-player-card="true"
         data-card-index="${index}"
         data-card-key="${card.rank}-${card.suit}"
@@ -76,16 +76,24 @@ function getFanLayout(count: number): { positions: number[]; rotations: number[]
 function renderFaceDownCards(count: number): string {
   const backUrl = getCardBackUrl();
   return Array.from({ length: count }, () => {
-    return `<div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" data-opponent-card="true">
+    return `<div class="h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20" data-opponent-card="true">
       ${renderCardSvg(backUrl, "Card back", "opacity-90")}
     </div>`;
   }).join("");
 }
 
-function renderEmptyCardSlot(): string {
-  return `<div class="flex h-24 w-16 items-center justify-center rounded-xl border border-dashed border-emerald-200/50 sm:h-28 sm:w-20">
+function renderEmptyCardSlot(variant: "standalone" | "inset" = "standalone"): string {
+  const roundedClass = variant === "inset" ? "rounded-lg" : "rounded-xl";
+  return `<div class="card-slot flex h-full w-full items-center justify-center ${roundedClass} border border-dashed border-emerald-200/50">
     <span class="text-xs text-emerald-200/70">Empty</span>
   </div>`;
+}
+
+function getActivePlayerIndex(game: MatchState["game"]): 0 | 1 {
+  if (game.currentTrick) {
+    return game.currentTrick.leaderIndex === 0 ? 1 : 0;
+  }
+  return game.leader;
 }
 
 export function renderGamePage({ code, matchState, viewerIndex, hostToken }: GameOptions): string {
@@ -112,16 +120,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const opponentWonCards = wonTricks[opponentIndex].length;
   const playerWonTricks = Math.floor(playerWonCards / 2);
   const opponentWonTricks = Math.floor(opponentWonCards / 2);
-  const isWaitingForTurn = matchState.game.leader !== playerIndex;
+  const isWaitingForTurn = getActivePlayerIndex(matchState.game) !== playerIndex;
   const suitMeta = SUIT_SYMBOLS[trumpSuit];
   const trumpCardMarkup = trumpCard
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
-    : renderEmptyCardSlot();
+    : renderEmptyCardSlot("inset");
   const stockCount = stock.length;
   const stockPileMarkup =
     stockCount > 0
       ? renderCardSvg(getCardBackUrl(), "Stock pile", "opacity-90")
-      : renderEmptyCardSlot();
+      : renderEmptyCardSlot("inset");
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -137,6 +145,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       }
       .game-board[data-waiting="true"] {
         padding-bottom: clamp(3.5rem, 12vh, 9rem);
+      }
+      .card-svg {
+        width: 100%;
+        height: 100%;
       }
       @media (min-width: 640px) {
         .player-hand {
@@ -200,7 +212,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   <span class="text-emerald-200/70">Cards</span>
                   <span class="text-lg font-semibold">${opponentWonCards}</span>
                 </div>
-                <div class="flex items-center" data-opponent-won-pile="true">
+                <div class="flex h-24 w-16 items-center sm:h-28 sm:w-20" data-opponent-won-pile="true">
                   ${opponentWonPileMarkup}
                 </div>
               </div>
@@ -238,8 +250,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
               <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Current trick</p>
               <div class="mt-4 flex items-center justify-center gap-4" data-trick-area="true">
-                ${renderEmptyCardSlot()}
-                ${renderEmptyCardSlot()}
+                <div class="h-24 w-16 sm:h-28 sm:w-20">${renderEmptyCardSlot()}</div>
+                <div class="h-24 w-16 sm:h-28 sm:w-20">${renderEmptyCardSlot()}</div>
               </div>
               <p class="mt-3 text-center text-xs text-emerald-200/70">No cards played yet</p>
             </div>
@@ -249,11 +261,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               <div class="mt-4 flex items-center justify-center gap-6">
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Trump card</span>
-                  <div data-trump-card="true">${trumpCardMarkup}</div>
+                  <div
+                    class="h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20"
+                    data-trump-card="true"
+                  >
+                    ${trumpCardMarkup}
+                  </div>
                 </div>
                 <div class="flex flex-col items-center gap-2">
                   <span class="text-xs text-emerald-200/70">Stock</span>
-                  <div class="rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20" data-stock-pile="true">
+                  <div class="h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20" data-stock-pile="true">
                     ${stockPileMarkup}
                   </div>
                   <span class="text-sm font-semibold" data-stock-count="true">${stockCount} cards</span>
@@ -277,7 +294,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   <span class="text-emerald-200/70">Cards</span>
                   <span class="text-lg font-semibold">${playerWonCards}</span>
                 </div>
-                <div class="flex items-center" data-player-won-pile="true">
+                <div class="flex h-24 w-16 items-center sm:h-28 sm:w-20" data-player-won-pile="true">
                   ${playerWonPileMarkup}
                 </div>
               </div>
@@ -301,6 +318,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
     <script>
       const viewerIndex = ${playerIndex};
       const opponentIndex = ${opponentIndex};
+      const roomCode = ${JSON.stringify(code)};
       const initialState = ${JSON.stringify(matchState)};
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
@@ -321,20 +339,65 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
       const waitingFilter = "grayscale(0.45)";
       const waitingOpacity = 0.65;
-      const getWaitingOffset = () => Math.round(window.innerHeight * 0.33);
+      // ~10% of card height (h-24/h-28) to keep waiting cards lifted subtly.
+      const waitingOffsetPx = 11;
+      let animationsSettled = true;
+      let activeAnimations = 0;
+      let playRequestPending = false;
+
+      const trackAnimations = (count) => {
+        if (count <= 0) {
+          return () => {};
+        }
+        activeAnimations += count;
+        animationsSettled = false;
+        return () => {
+          activeAnimations = Math.max(0, activeAnimations - 1);
+          if (activeAnimations === 0) {
+            animationsSettled = true;
+          }
+        };
+      };
 
       const cardKey = (card) => card.rank + "-" + card.suit;
+      const parseCardKey = (key) => {
+        if (!key) {
+          return null;
+        }
+        const separatorIndex = key.lastIndexOf("-");
+        if (separatorIndex <= 0 || separatorIndex === key.length - 1) {
+          return null;
+        }
+        return {
+          rank: key.slice(0, separatorIndex),
+          suit: key.slice(separatorIndex + 1),
+        };
+      };
       const getCardImageUrl = (card) =>
         svgCardsCdn + "#" + suitIds[card.suit] + "_" + rankIds[card.rank];
       const renderCardSvg = (url, label, extraClasses = "") => {
         const aria = label ? 'role="img" aria-label="' + label + '"' : 'aria-hidden="true"';
-        const classes = ("h-24 w-16 sm:h-28 sm:w-20 " + extraClasses).trim();
-        return '<svg ' + aria + ' class="' + classes + '"><use href="' + url + '"></use></svg>';
+        const classes = ("card-svg " + extraClasses).trim();
+        return (
+          '<svg ' +
+          aria +
+          ' class="' +
+          classes +
+          '" viewBox="0 0 169.075 244.640"><use href="' +
+          url +
+          '"></use></svg>'
+        );
       };
-      const renderEmptyCardSlot = () =>
-        '<div class="flex h-24 w-16 items-center justify-center rounded-xl border border-dashed border-emerald-200/50 sm:h-28 sm:w-20">' +
-        '<span class="text-xs text-emerald-200/70">Empty</span>' +
-        "</div>";
+      const renderEmptyCardSlot = (variant = "standalone") => {
+        const roundedClass = variant === "inset" ? "rounded-lg" : "rounded-xl";
+        return (
+          '<div class="card-slot flex h-full w-full items-center justify-center ' +
+          roundedClass +
+          ' border border-dashed border-emerald-200/50">' +
+          '<span class="text-xs text-emerald-200/70">Empty</span>' +
+          "</div>"
+        );
+      };
       const getFanLayout = (count) => {
         if (count <= 1) {
           return { positions: [50], rotations: [0] };
@@ -356,7 +419,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const createPlayerCardElement = (card, index, fanX, fanRot) => {
         const label = card.rank + " of " + card.suit;
         const wrapper = document.createElement("div");
-        wrapper.className = "player-card rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20";
+        wrapper.className =
+          "player-card h-24 w-16 rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20";
         wrapper.dataset.playerCard = "true";
         wrapper.dataset.cardIndex = String(index);
         wrapper.dataset.cardKey = cardKey(card);
@@ -370,11 +434,50 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
       const createOpponentCardElement = () => {
         const wrapper = document.createElement("div");
-        wrapper.className = "rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20";
+        wrapper.className = "h-24 w-16 rounded-xl bg-slate-900/30 p-1 shadow-lg shadow-black/20 sm:h-28 sm:w-20";
         wrapper.dataset.opponentCard = "true";
         wrapper.innerHTML = renderCardSvg(cardBackUrl, "Card back", "opacity-90");
         return wrapper;
       };
+      const hasPotentialMarriage = (hand, suit) => {
+        let hasKing = false;
+        let hasQueen = false;
+        for (const card of hand) {
+          if (card.suit !== suit) {
+            continue;
+          }
+          if (card.rank === "K") {
+            hasKing = true;
+          } else if (card.rank === "Q") {
+            hasQueen = true;
+          }
+          if (hasKing && hasQueen) {
+            return true;
+          }
+        }
+        return false;
+      };
+      const findDeclareableMarriages = (state, playerIndex) => {
+        if (!state?.game) {
+          return [];
+        }
+        const declared = new Set(state.game.declaredMarriages ?? []);
+        const hand = state.game.playerHands[playerIndex] ?? [];
+        return Object.keys(suitIds).filter(
+          (suit) => !declared.has(suit) && hasPotentialMarriage(hand, suit),
+        );
+      };
+      const getActivePlayerIndex = (game) => {
+        if (!game) {
+          return null;
+        }
+        if (game.currentTrick && typeof game.currentTrick.leaderIndex === "number") {
+          return game.currentTrick.leaderIndex === 0 ? 1 : 0;
+        }
+        return game.leader;
+      };
+      const isPlayerTurn = (state, playerIndex) =>
+        getActivePlayerIndex(state?.game) === playerIndex;
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
       const areHandsEqual = (left, right) => {
@@ -387,7 +490,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
-        const waitingOffset = getWaitingOffset();
+        const completeAnimation = trackAnimations(cards.length);
+        const waitingOffset = waitingOffsetPx;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -405,6 +509,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               duration: 0.6,
               ease: "power3.out",
               delay: index * 0.08,
+              onComplete: completeAnimation,
             },
           );
         });
@@ -413,7 +518,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
-        const waitingOffset = getWaitingOffset();
+        const completeAnimation = trackAnimations(cards.length);
+        const waitingOffset = waitingOffsetPx;
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -428,6 +534,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             duration: 0.45,
             ease: "power3.out",
             delay: index * 0.03,
+            onComplete: completeAnimation,
           });
         });
       };
@@ -435,24 +542,30 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!window.gsap || cards.length === 0) {
           return;
         }
+        const completeAnimation = trackAnimations(cards.length);
         cards.forEach((card) => {
-          window.gsap.fromTo(card, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35 });
+          window.gsap.fromTo(
+            card,
+            { opacity: 0, y: 12 },
+            { opacity: 1, y: 0, duration: 0.35, onComplete: completeAnimation },
+          );
         });
       };
-      const updateWaitingState = (nextLeader) => {
+      const updateWaitingState = (nextGame) => {
         const hand = document.querySelector("[data-player-hand]");
         const board = document.querySelector(".game-board");
         if (!hand) {
           return;
         }
-        const isWaiting = nextLeader !== viewerIndex;
+        const activePlayer = getActivePlayerIndex(nextGame);
+        const isWaiting = activePlayer !== viewerIndex;
         const waitingValue = isWaiting ? "true" : "false";
         hand.dataset.waiting = waitingValue;
         if (board) {
           board.dataset.waiting = waitingValue;
         }
       };
-      const updatePlayerHand = (nextHand, nextLeader) => {
+      const updatePlayerHand = (nextHand, nextGame) => {
         const hand = document.querySelector("[data-player-hand]");
         if (!hand) {
           return;
@@ -501,8 +614,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           }
           hand.appendChild(cardEl);
         });
-        const isWaiting = nextLeader !== viewerIndex;
-        updateWaitingState(nextLeader);
+        const activePlayer = getActivePlayerIndex(nextGame);
+        const isWaiting = activePlayer !== viewerIndex;
+        updateWaitingState(nextGame);
         animateNewCards(newCards, isWaiting);
         const existingAnimationTargets = isWaiting === wasWaiting ? movedCards : retainedCards;
         animateExistingCards(existingAnimationTargets, isWaiting);
@@ -542,7 +656,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         trumpContainer.dataset.trumpKey = nextKey;
         if (!nextTrumpCard) {
-          trumpContainer.innerHTML = renderEmptyCardSlot();
+          trumpContainer.innerHTML = renderEmptyCardSlot("inset");
           return;
         }
         const label = nextTrumpCard.rank + " of " + nextTrumpCard.suit;
@@ -562,7 +676,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         stockPile.innerHTML =
           nextCount > 0
             ? renderCardSvg(cardBackUrl, "Stock pile", "opacity-90")
-            : renderEmptyCardSlot();
+            : renderEmptyCardSlot("inset");
         if (stockCount) {
           stockCount.textContent = nextCount + " cards";
         }
@@ -600,13 +714,63 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       }
 
       document.addEventListener("DOMContentLoaded", () => {
+        const hand = document.querySelector("[data-player-hand]");
+        if (hand) {
+          hand.addEventListener("click", async (event) => {
+            const cardEl = event.target.closest("[data-player-card]");
+            if (!cardEl || !(cardEl instanceof HTMLElement)) {
+              return;
+            }
+            if (!animationsSettled) {
+              return;
+            }
+            if (playRequestPending) {
+              return;
+            }
+            if (!isPlayerTurn(currentState, viewerIndex)) {
+              return;
+            }
+            const parsed = parseCardKey(cardEl.dataset.cardKey);
+            if (!parsed) {
+              return;
+            }
+            const payload = { card: parsed };
+            const canDeclareMarriage =
+              currentState?.game &&
+              !currentState.game.currentTrick &&
+              currentState.game.leader === viewerIndex;
+            if (canDeclareMarriage && (parsed.rank === "K" || parsed.rank === "Q")) {
+              const declareable = findDeclareableMarriages(currentState, viewerIndex);
+              if (declareable.includes(parsed.suit)) {
+                payload.marriageSuit = parsed.suit;
+              }
+            }
+            playRequestPending = true;
+            try {
+              const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/play", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                console.warn("Play rejected", response.status, errorText);
+              }
+            } catch (error) {
+              console.warn("Failed to play card", error);
+            } finally {
+              playRequestPending = false;
+            }
+          });
+        }
         if (!window.gsap) {
           return;
         }
         const cards = Array.from(document.querySelectorAll("[data-player-card]"));
-        const hand = document.querySelector("[data-player-hand]");
         const isWaiting = hand?.dataset.waiting === "true";
-        const waitingOffset = getWaitingOffset();
+        const waitingOffset = waitingOffsetPx;
+        const completeAnimation = trackAnimations(cards.length);
         cards.forEach((card, index) => {
           const fanX = Number(card.dataset.fanX ?? "50");
           const fanRot = Number(card.dataset.fanRot ?? "0");
@@ -624,19 +788,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               duration: 0.6,
               ease: "power3.out",
               delay: index * 0.08,
+              onComplete: completeAnimation,
             },
           );
         });
 
-        if (isWaiting) {
-          window.addEventListener("resize", () => {
-            const currentCards = Array.from(document.querySelectorAll("[data-player-card]"));
-            if (currentCards.length === 0) {
-              return;
-            }
-            window.gsap.set(currentCards, { y: getWaitingOffset() });
-          });
-        }
       });
       document.body.addEventListener("htmx:sseMessage", (event) => {
         const detail = event.detail || {};
@@ -657,12 +813,14 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const nextGame = parsedState.game;
         const currentGame = currentState?.game;
 
+        const nextActivePlayer = getActivePlayerIndex(nextGame);
+        const currentActivePlayer = getActivePlayerIndex(currentGame);
         if (
           !currentGame ||
-          currentGame.leader !== nextGame.leader ||
+          currentActivePlayer !== nextActivePlayer ||
           !areHandsEqual(currentGame.playerHands[viewerIndex], nextGame.playerHands[viewerIndex])
         ) {
-          updatePlayerHand(nextGame.playerHands[viewerIndex], nextGame.leader);
+          updatePlayerHand(nextGame.playerHands[viewerIndex], nextGame);
         }
 
         if (
