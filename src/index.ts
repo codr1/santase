@@ -320,6 +320,11 @@ export async function handleRequest(request: Request): Promise<Response> {
         wonTricks: nextWonTricks,
         roundScores: nextRoundScores,
         currentTrick: null,
+        lastCompletedTrick: {
+          leaderIndex: currentTrick.leaderIndex,
+          leaderCard: currentTrick.leaderCard,
+          followerCard: card,
+        },
       };
 
       nextGame = drawFromStock(nextGame, winnerIndex);

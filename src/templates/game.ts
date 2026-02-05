@@ -89,6 +89,28 @@ function renderEmptyCardSlot(variant: "standalone" | "inset" = "standalone"): st
   </div>`;
 }
 
+function renderTrickCard(card: Card, role: "leader" | "follower"): string {
+  const label = `${card.rank} of ${card.suit}`;
+  const rotation = role === "leader" ? -5 : 5;
+  return `<div
+    class="h-full w-full rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20"
+    data-trick-card="${role}"
+    data-card-key="${escapeHtml(`${card.rank}-${card.suit}`)}"
+    data-rotation="${rotation}"
+    style="transform: rotate(${rotation}deg);"
+  >
+    ${renderCardSvg(getCardImageUrl(card), label, "drop-shadow")}
+  </div>`;
+}
+
+function renderTrickSlot(role: "leader" | "follower", card?: Card | null): string {
+  const content = card ? renderTrickCard(card, role) : renderEmptyCardSlot();
+  const cardKey = card ? `${card.rank}-${card.suit}` : "";
+  return `<div class="h-24 w-16 sm:h-28 sm:w-20" data-trick-position="${role}" data-trick-slot="true" data-card-key="${escapeHtml(cardKey)}">
+    ${content}
+  </div>`;
+}
+
 function getActivePlayerIndex(game: MatchState["game"]): 0 | 1 {
   if (game.currentTrick) {
     return game.currentTrick.leaderIndex === 0 ? 1 : 0;
@@ -120,6 +142,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const opponentWonCards = wonTricks[opponentIndex].length;
   const playerWonTricks = Math.floor(playerWonCards / 2);
   const opponentWonTricks = Math.floor(opponentWonCards / 2);
+  const displayTrick:
+    | { leaderIndex: 0 | 1; leaderCard: Card; followerCard?: Card }
+    | null = matchState.game.currentTrick ?? matchState.game.lastCompletedTrick ?? null;
+  const leaderTrickCard = displayTrick?.leaderCard ?? null;
+  const followerTrickCard = displayTrick?.followerCard ?? null;
+  const trickStatusText = matchState.game.currentTrick
+    ? "Waiting for response"
+    : displayTrick
+      ? "Last trick complete"
+      : "No cards played yet";
   const isWaitingForTurn = getActivePlayerIndex(matchState.game) !== playerIndex;
   const suitMeta = SUIT_SYMBOLS[trumpSuit];
   const trumpCardMarkup = trumpCard
@@ -250,10 +282,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
               <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Current trick</p>
               <div class="mt-4 flex items-center justify-center gap-4" data-trick-area="true">
-                <div class="h-24 w-16 sm:h-28 sm:w-20">${renderEmptyCardSlot()}</div>
-                <div class="h-24 w-16 sm:h-28 sm:w-20">${renderEmptyCardSlot()}</div>
+                ${renderTrickSlot("leader", leaderTrickCard)}
+                ${renderTrickSlot("follower", followerTrickCard)}
               </div>
-              <p class="mt-3 text-center text-xs text-emerald-200/70">No cards played yet</p>
+              <p class="mt-3 text-center text-xs text-emerald-200/70" data-trick-status="true">
+                ${trickStatusText}
+              </p>
             </div>
 
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
@@ -398,6 +432,42 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           "</div>"
         );
       };
+      const createTrickCardElement = (card, role) => {
+        const label = card.rank + " of " + card.suit;
+        const rotation = role === "leader" ? -5 : 5;
+        const wrapper = document.createElement("div");
+        wrapper.className = "h-full w-full rounded-xl bg-slate-900/40 p-1 shadow-lg shadow-black/20";
+        wrapper.dataset.trickCard = role;
+        wrapper.dataset.cardKey = cardKey(card);
+        wrapper.dataset.rotation = String(rotation);
+        wrapper.style.transform = "rotate(" + rotation + "deg)";
+        wrapper.innerHTML = renderCardSvg(getCardImageUrl(card), label, "drop-shadow");
+        return wrapper;
+      };
+      const escapeSelector = (value) => {
+        if (window.CSS && typeof CSS.escape === "function") {
+          return CSS.escape(value);
+        }
+        return value.replace(/"/g, '\\"');
+      };
+      const getTrickSourceElement = (card, playerIndex) => {
+        if (!card || typeof playerIndex !== "number") {
+          return null;
+        }
+        if (playerIndex === viewerIndex) {
+          const hand = document.querySelector("[data-player-hand]");
+          if (!hand) {
+            return null;
+          }
+          const key = escapeSelector(cardKey(card));
+          return hand.querySelector('[data-player-card][data-card-key="' + key + '"]') || hand;
+        }
+        const opponentHand = document.querySelector("[data-opponent-hand]");
+        if (!opponentHand) {
+          return null;
+        }
+        return opponentHand.querySelector("[data-opponent-card]") || opponentHand;
+      };
       const getFanLayout = (count) => {
         if (count <= 1) {
           return { positions: [50], rotations: [0] };
@@ -476,10 +546,33 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         return game.leader;
       };
+      const getDisplayTrick = (game) => game?.currentTrick ?? game?.lastCompletedTrick ?? null;
       const isPlayerTurn = (state, playerIndex) =>
         getActivePlayerIndex(state?.game) === playerIndex;
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
+      const areOptionalCardsEqual = (left, right) => {
+        if (!left && !right) {
+          return true;
+        }
+        if (!left || !right) {
+          return false;
+        }
+        return areCardsEqual(left, right);
+      };
+      const areTricksEqual = (left, right) => {
+        if (!left && !right) {
+          return true;
+        }
+        if (!left || !right) {
+          return false;
+        }
+        return (
+          left.leaderIndex === right.leaderIndex &&
+          areCardsEqual(left.leaderCard, right.leaderCard) &&
+          areOptionalCardsEqual(left.followerCard, right.followerCard)
+        );
+      };
       const areHandsEqual = (left, right) => {
         if (!left || !right || left.length !== right.length) {
           return false;
@@ -644,6 +737,86 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             cards[index]?.remove();
           }
         }
+      };
+      const updateTrickArea = (nextGame, prevGame) => {
+        const trickArea = document.querySelector("[data-trick-area]");
+        if (!trickArea) {
+          return;
+        }
+        const leaderSlot = trickArea.querySelector('[data-trick-position="leader"]');
+        const followerSlot = trickArea.querySelector('[data-trick-position="follower"]');
+        if (!leaderSlot || !followerSlot) {
+          return;
+        }
+        const nextTrick = getDisplayTrick(nextGame);
+        const prevTrick = getDisplayTrick(prevGame);
+        const status = document.querySelector("[data-trick-status]");
+        if (status) {
+          if (nextGame?.currentTrick) {
+            status.textContent = "Waiting for response";
+          } else if (nextGame?.lastCompletedTrick) {
+            status.textContent = "Last trick complete";
+          } else {
+            status.textContent = "No cards played yet";
+          }
+        }
+
+        const leaderCard = nextTrick?.leaderCard ?? null;
+        const followerCard = nextTrick?.followerCard ?? null;
+        const leaderIndex = nextTrick?.leaderIndex ?? null;
+        const followerIndex =
+          typeof leaderIndex === "number" ? (leaderIndex === 0 ? 1 : 0) : null;
+
+        const animateIntoSlot = (slot, card, role, sourceIndex) => {
+          if (!slot) {
+            return;
+          }
+          if (!card) {
+            slot.dataset.cardKey = "";
+            slot.innerHTML = renderEmptyCardSlot();
+            return;
+          }
+          const key = cardKey(card);
+          if (slot.dataset.cardKey === key) {
+            return;
+          }
+          slot.dataset.cardKey = key;
+          const cardEl = createTrickCardElement(card, role);
+          slot.innerHTML = "";
+          slot.appendChild(cardEl);
+
+          const rotation = Number(cardEl.dataset.rotation ?? "0");
+          const sourceEl = getTrickSourceElement(card, sourceIndex);
+          if (!window.gsap || !sourceEl) {
+            cardEl.style.transform = "rotate(" + rotation + "deg)";
+            return;
+          }
+
+          const sourceRect = sourceEl.getBoundingClientRect();
+          const targetRect = cardEl.getBoundingClientRect();
+          const deltaX = sourceRect.left - targetRect.left;
+          const deltaY = sourceRect.top - targetRect.top;
+          const completeAnimation = trackAnimations(1);
+          window.gsap.fromTo(
+            cardEl,
+            { x: deltaX, y: deltaY, rotation: 0, opacity: 0 },
+            {
+              x: 0,
+              y: 0,
+              rotation: rotation,
+              opacity: 1,
+              duration: 0.55,
+              ease: "power3.out",
+              onComplete: completeAnimation,
+            },
+          );
+        };
+
+        if (!nextTrick && !prevTrick) {
+          return;
+        }
+        animateIntoSlot(leaderSlot, leaderCard, "leader", leaderIndex);
+        animateIntoSlot(followerSlot, followerCard, "follower", followerIndex);
       };
       const updateTrumpCard = (nextTrumpCard) => {
         const trumpContainer = document.querySelector("[data-trump-card]");
@@ -812,6 +985,13 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
         const nextGame = parsedState.game;
         const currentGame = currentState?.game;
+
+        if (
+          !currentGame ||
+          !areTricksEqual(getDisplayTrick(currentGame), getDisplayTrick(nextGame))
+        ) {
+          updateTrickArea(nextGame, currentGame);
+        }
 
         const nextActivePlayer = getActivePlayerIndex(nextGame);
         const currentActivePlayer = getActivePlayerIndex(currentGame);

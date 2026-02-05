@@ -14,6 +14,7 @@ const buildGameState = (overrides: Partial<GameState> = {}): GameState => {
     isClosed: false,
     leader: 0,
     currentTrick: null,
+    lastCompletedTrick: null,
     closedBy: null,
     wonTricks: [[], []],
     roundScores: [0, 0],
