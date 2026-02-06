@@ -240,6 +240,13 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
     >
       <div class="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Game Starting</h1>
+        <div
+          class="fixed right-4 top-4 z-50 max-w-xs rounded-xl bg-rose-500/95 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/30 sm:right-8"
+          data-action-notice
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
         <header class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-900/60 px-4 py-3 shadow-lg shadow-black/20 ring-1 ring-emerald-400/20">
           <div class="flex flex-col gap-1">
             <span class="text-xs uppercase tracking-[0.35em] text-emerald-200/80">Room</span>
@@ -359,7 +366,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   </button>
                   <button
                     type="button"
-                    class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+                    class="rounded-full bg-rose-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white shadow-lg shadow-black/20 transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:bg-rose-300/60"
                     data-declare-66="true"
                     ${canDeclare ? "" : "hidden"}
                   >
@@ -556,6 +563,32 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentReadyEl = document.querySelector("[data-opponent-ready]");
       const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
       const matchCompleteEl = document.querySelector("[data-match-complete]");
+      const actionNoticeEl = document.querySelector("[data-action-notice]");
+      const actionNoticeAutoDismissMs = 4000;
+      let actionNoticeTimeoutId = null;
+
+      const hideActionNotice = () => {
+        if (!actionNoticeEl) {
+          return;
+        }
+        actionNoticeEl.hidden = true;
+        actionNoticeEl.textContent = "";
+      };
+
+      const showActionNotice = (message) => {
+        if (!actionNoticeEl) {
+          return;
+        }
+        if (actionNoticeTimeoutId !== null) {
+          window.clearTimeout(actionNoticeTimeoutId);
+        }
+        actionNoticeEl.textContent = message;
+        actionNoticeEl.hidden = false;
+        actionNoticeTimeoutId = window.setTimeout(() => {
+          hideActionNotice();
+          actionNoticeTimeoutId = null;
+        }, actionNoticeAutoDismissMs);
+      };
 
       const resetRoundEndModal = (clearReadyState = false) => {
         roundEndCountdownValue = roundEndCountdownStart;
@@ -1836,10 +1869,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                 },
               );
               if (!response.ok) {
-                const errorText = await response.text().catch(() => "");
-                console.warn("Declare 66 rejected", response.status, errorText);
+                const body = await response.json().catch(() => null);
+                console.warn("Declare 66 rejected", response.status, body);
+                showActionNotice(body?.error || "Declare 66 failed. Try again.");
               }
             } catch (error) {
+              showActionNotice("Declare 66 failed. Check your connection and try again.");
               console.warn("Failed to declare 66", error);
             } finally {
               declareRequestPending = false;
