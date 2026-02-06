@@ -225,6 +225,9 @@ export function renderGamePage({
   const statusMarkup = `<span>Connecting...</span>`;
   const body = `
     <style>
+      [hidden] {
+        display: none !important;
+      }
       .player-hand {
         position: relative;
         height: 8rem;
