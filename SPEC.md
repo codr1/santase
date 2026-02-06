@@ -56,9 +56,12 @@ type Room = {
   guestEverJoined: boolean;
   hostReady: boolean;
   guestReady: boolean;
-  disconnectTimeout: ReturnType<typeof setTimeout> | null;
-  disconnectPendingRole: "host" | "guest" | null;
+  disconnectTimeouts: {
+    host?: ReturnType<typeof setTimeout>;
+    guest?: ReturnType<typeof setTimeout>;
+  };
   forfeit: boolean;
+  draw: boolean;
   lastActivity: number;
   lastTrickCompletedAt: number | null;
   createdAt: number;
@@ -84,7 +87,7 @@ type RoomLookupResult =
 SSE endpoint returns specific message for `host-left`: "Room closed because the host left."
 
 **Functions**:
-- `forfeitMatch(room, winnerIndex)`: Sets the winner's match score to at least 11, marks `forfeit` as true, and resets ready flags; returns false if match is already over
+- `forfeitMatch(room, winnerIndex)`: Sets the winner's match score to at least 11, marks `forfeit` as true, sets `draw` to false, and resets ready flags; returns false if match is already over
 
 ## SSE
 
@@ -93,8 +96,9 @@ Server-Sent Events for real-time communication.
 - **Endpoint**: `/sse/:code?hostToken=X` (token optional, identifies host)
 - **Heartbeat**: Every 25 seconds (comment ping)
 - **Cleanup**: Room deleted if host disconnects before guest ever joins
-- **Disconnect forfeit**: When a player disconnects after the game has started (guest has joined) and the match is not over, a 30-second timeout starts; if the disconnected player does not reconnect, the remaining player wins via `forfeitMatch`; reconnecting clears the timeout
-- **Status markup**: `<span>` includes `data-host-connected` and `data-guest-connected` attributes for client-side parsing
+- **Disconnect handling**: Each player gets an independent 30-second disconnect timeout. When a player disconnects after the game has started (guest has joined) and the match is not over, their timeout starts; reconnecting clears only that player's timeout. If one player's timeout fires while the other is still connected, the connected player wins via `forfeitMatch`. If both players are disconnected when a timeout fires, the match is declared a draw (`room.draw = true`); a subsequent timeout for the other role is a no-op after draw
+- **Draw state**: When `room.draw` is true, SSE connections receive a single `game-state` event with `draw: true` and then close; the game page redirects to results
+- **Status markup**: `<span>` includes `data-host-connected` and `data-guest-connected` attributes with empty content (client-side JS derives status text)
 
 ### Events
 
@@ -103,7 +107,7 @@ Server-Sent Events for real-time communication.
 | `connected` | all | `"guest"` when guest first joins |
 | `status` | all | Lobby status HTML (`<span>` with connection state) |
 | `game-start` | all | Game URL path for redirect |
-| `game-state` | all | JSON-serialized `ViewerMatchState` for real-time updates |
+| `game-state` | all | JSON-serialized `ViewerMatchState` with added `draw` boolean for real-time updates |
 | `ready-state` | all | JSON `{hostReady, guestReady}` when a player marks ready |
 
 ## Play Endpoint
@@ -257,14 +261,15 @@ Same as play endpoint (hostToken query param or cookie).
 
 | Status | Condition |
 |--------|-----------|
-| 200 | Match over, renders results page |
-| 303 | Match not over, redirects to game page |
+| 200 | Match over or draw, renders results page |
+| 303 | Match not over and not a draw, redirects to game page |
 | 404/410 | Room not found / expired |
 
 ### Behavior
 
 - Displays match winner, final match scores, last round breakdown (winner, reason, scores, game points), and win condition
 - Shows "Victory by forfeit" / "Defeat by forfeit" when match ended via disconnect
+- Shows "Match drawn" / "Both players disconnected" when match ended as a draw
 - Includes "Return to Lobby" link
 
 ## Templates
@@ -308,6 +313,7 @@ Renders the interactive game board with viewer-specific perspective.
 - **Click-to-play**: Player cards are clickable when it's the player's turn; clicking sends POST to `/rooms/:code/play`; automatically declares marriage when leading with K or Q of a declareable suit
 - **Round-end modal**: Shown when a round ends; displays round winner, reason, round/match scores, and game points earned; includes a 10-second countdown timer and a "Ready" button that sends POST to `/rooms/:code/ready`; when countdown expires, sends POST to `/rooms/:code/next-round`; shows opponent ready state via `ready-state` SSE events; pauses countdown when opponent disconnects; redirects to `/rooms/:code/results` when match is over
 - **Disconnect handling**: Monitors `status` SSE events for opponent connection state; pauses round-end countdown when opponent disconnects; shows "Opponent disconnected" status text; resumes countdown on reconnect
+- **Draw redirect**: If the room is in draw state, the game page returns 303 redirect to the results page
 
 ## Game
 
