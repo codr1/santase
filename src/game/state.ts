@@ -196,28 +196,49 @@ export function isDeckClosedOrExhausted(state: GameState): boolean {
   return state.isClosed || state.stock.length === 0;
 }
 
-export function canCloseDeck(state: GameState): boolean {
+export function canCloseDeck(state: GameState, playerIndex: 0 | 1): boolean {
   if (state.roundResult) {
     return false;
   }
+
+  if (state.currentTrick) {
+    return false;
+  }
+
+  if (state.leader !== playerIndex) {
+    return false;
+  }
+
   return state.stock.length >= 3 && !state.isClosed && state.trumpCard !== null;
 }
 
 export function closeDeck(state: GameState, playerIndex: 0 | 1): GameState {
-  if (state.roundResult) {
-    throw new Error("Round already ended.");
-  }
+  if (!canCloseDeck(state, playerIndex)) {
+    if (state.roundResult) {
+      throw new Error("Round already ended.");
+    }
 
-  if (state.stock.length < 3) {
-    throw new Error("Stock must have at least 3 cards to close the deck.");
-  }
+    if (state.currentTrick) {
+      throw new Error("Cannot close the deck during a trick.");
+    }
 
-  if (state.isClosed) {
-    throw new Error("Deck is already closed.");
-  }
+    if (state.leader !== playerIndex) {
+      throw new Error("Only the trick leader can close the deck.");
+    }
 
-  if (state.trumpCard === null) {
-    throw new Error("Trump card is not available to close the deck.");
+    if (state.stock.length < 3) {
+      throw new Error("Stock must have at least 3 cards to close the deck.");
+    }
+
+    if (state.isClosed) {
+      throw new Error("Deck is already closed.");
+    }
+
+    if (state.trumpCard === null) {
+      throw new Error("Trump card is not available to close the deck.");
+    }
+
+    throw new Error("Cannot close the deck.");
   }
 
   return {
