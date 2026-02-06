@@ -13,10 +13,12 @@ const decoder = new TextDecoder();
 type CapturedDisconnectTimer = {
   callback: () => void;
   cleared: boolean;
+  remainingMs: number;
 };
 
 function interceptDisconnectTimeouts(): {
   fireNext: () => boolean;
+  advanceBy: (elapsedMs: number) => number;
   restore: () => void;
 } {
   const originalSetTimeout = globalThis.setTimeout;
@@ -32,6 +34,7 @@ function interceptDisconnectTimeouts(): {
       const timer: CapturedDisconnectTimer = {
         callback: handler as () => void,
         cleared: false,
+        remainingMs: timeout,
       };
       captured.push(timer);
       return timer as unknown as ReturnType<typeof setTimeout>;
@@ -58,6 +61,24 @@ function interceptDisconnectTimeouts(): {
       timer.cleared = true;
       timer.callback();
       return true;
+    },
+    advanceBy: (elapsedMs: number) => {
+      if (elapsedMs <= 0) {
+        return 0;
+      }
+      let fired = 0;
+      for (const timer of captured) {
+        if (timer.cleared) {
+          continue;
+        }
+        timer.remainingMs -= elapsedMs;
+        if (timer.remainingMs <= 0) {
+          timer.cleared = true;
+          timer.callback();
+          fired += 1;
+        }
+      }
+      return fired;
     },
     restore: () => {
       globalThis.setTimeout = originalSetTimeout;
@@ -131,53 +152,117 @@ async function readEvents(
 describe("SSE status broadcasting", () => {
   test("sends status on connect and disconnect for host and guest", async () => {
     const room = createRoom();
-
     const hostAbort = new AbortController();
-    const hostRequest = new Request(`http://example/rooms/${room.code}?hostToken=${room.hostToken}`, {
-      signal: hostAbort.signal,
-    });
-    const hostResponse = handleSse(hostRequest, room.code);
-    const hostReader = hostResponse.body?.getReader();
-    if (!hostReader) {
-      throw new Error("Expected host SSE stream reader");
-    }
-
-    const initialEvents = await readEvents(hostReader, 1);
-    const initialStatus = initialEvents.find((event) => event.event === "status");
-    expect(initialStatus?.data).toBe(
-      '<span data-host-connected="true" data-guest-connected="false"></span>',
-    );
-
     const guestAbort = new AbortController();
-    const guestRequest = new Request(`http://example/rooms/${room.code}`, {
-      signal: guestAbort.signal,
-    });
-    const guestResponse = handleSse(guestRequest, room.code);
-    void guestResponse;
 
-    const guestConnectEvents = await readEvents(hostReader, 4);
-    const connectedEvent = guestConnectEvents.find((event) => event.event === "connected");
-    const gameStartAfterGuest = guestConnectEvents.find((event) => event.event === "game-start");
-    const gameStateAfterGuest = guestConnectEvents.find((event) => event.event === "game-state");
-    const statusAfterGuest = guestConnectEvents.find((event) => event.event === "status");
-    expect(connectedEvent?.data).toBe("guest");
-    expect(gameStartAfterGuest?.data).toBe(`/rooms/${room.code}/game`);
-    expect(gameStateAfterGuest?.data).toBe(
-      JSON.stringify({ ...getViewerMatchState(room.matchState, room.hostPlayerIndex), draw: false }),
-    );
-    expect(statusAfterGuest?.data).toBe(
-      '<span data-host-connected="true" data-guest-connected="true"></span>',
-    );
+    try {
+      const hostRequest = new Request(
+        `http://example/rooms/${room.code}?hostToken=${room.hostToken}`,
+        {
+          signal: hostAbort.signal,
+        },
+      );
+      const hostResponse = handleSse(hostRequest, room.code);
+      const hostReader = hostResponse.body?.getReader();
+      if (!hostReader) {
+        throw new Error("Expected host SSE stream reader");
+      }
 
-    guestAbort.abort();
-    const guestDisconnectEvents = await readEvents(hostReader, 1);
-    const statusAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "status");
-    expect(statusAfterGuestLeft?.data).toBe(
-      '<span data-host-connected="true" data-guest-connected="false"></span>',
-    );
+      const initialEvents = await readEvents(hostReader, 1);
+      const initialStatus = initialEvents.find((event) => event.event === "status");
+      expect(initialStatus?.data).toBe(
+        '<span data-host-connected="true" data-guest-connected="false"></span>',
+      );
 
-    hostAbort.abort();
-    deleteRoom(room.code);
+      const guestRequest = new Request(`http://example/rooms/${room.code}`, {
+        signal: guestAbort.signal,
+      });
+      const guestResponse = handleSse(guestRequest, room.code);
+      void guestResponse;
+
+      const guestConnectEvents = await readEvents(hostReader, 4);
+      const connectedEvent = guestConnectEvents.find((event) => event.event === "connected");
+      const gameStartAfterGuest = guestConnectEvents.find((event) => event.event === "game-start");
+      const gameStateAfterGuest = guestConnectEvents.find((event) => event.event === "game-state");
+      const statusAfterGuest = guestConnectEvents.find((event) => event.event === "status");
+      expect(connectedEvent?.data).toBe("guest");
+      expect(gameStartAfterGuest?.data).toBe(`/rooms/${room.code}/game`);
+      expect(gameStateAfterGuest?.data).toBe(
+        JSON.stringify({ ...getViewerMatchState(room.matchState, room.hostPlayerIndex), draw: false }),
+      );
+      expect(statusAfterGuest?.data).toBe(
+        '<span data-host-connected="true" data-guest-connected="true"></span>',
+      );
+
+      guestAbort.abort();
+      const guestDisconnectEvents = await readEvents(hostReader, 1);
+      const statusAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "status");
+      expect(statusAfterGuestLeft?.data).toBe(
+        '<span data-host-connected="true" data-guest-connected="false"></span>',
+      );
+    } finally {
+      hostAbort.abort();
+      guestAbort.abort();
+      deleteRoom(room.code);
+    }
+  });
+
+  test("forfeits disconnected player after timeout and broadcasts game-state", async () => {
+    const timeoutControl = interceptDisconnectTimeouts();
+    const room = createRoom();
+    room.hostPlayerIndex = 0;
+    const hostAbort = new AbortController();
+    const guestAbort = new AbortController();
+    const initialScores = [...room.matchState.matchScores] as [number, number];
+
+    try {
+      const hostResponse = handleSse(
+        new Request(`http://example/rooms/${room.code}?hostToken=${room.hostToken}`, {
+          signal: hostAbort.signal,
+        }),
+        room.code,
+      );
+      const hostReader = hostResponse.body?.getReader();
+      if (!hostReader) {
+        throw new Error("Expected host SSE stream reader");
+      }
+      await readEvents(hostReader, 1);
+
+      handleSse(
+        new Request(`http://example/rooms/${room.code}`, {
+          signal: guestAbort.signal,
+        }),
+        room.code,
+      );
+      await readEvents(hostReader, 4);
+
+      guestAbort.abort();
+      const guestDisconnectEvents = await readEvents(hostReader, 1);
+      const statusAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "status");
+      expect(statusAfterGuestLeft?.data).toBe(
+        '<span data-host-connected="true" data-guest-connected="false"></span>',
+      );
+
+      const firedCount = timeoutControl.advanceBy(DISCONNECT_FORFEIT_TIMEOUT_MS + 1);
+      expect(firedCount).toBe(1);
+
+      const postTimeoutEvents = await readEvents(hostReader, 1);
+      const gameStateEvent = postTimeoutEvents.find((event) => event.event === "game-state");
+      expect(gameStateEvent).toBeDefined();
+      const payload = JSON.parse(gameStateEvent!.data) as {
+        draw?: boolean;
+        matchScores: [number, number];
+      };
+      expect(payload.draw).toBe(false);
+      expect(payload.matchScores).toEqual([11, initialScores[1]]);
+      expect(room.forfeit).toBe(true);
+      expect(room.draw).toBe(false);
+    } finally {
+      hostAbort.abort();
+      guestAbort.abort();
+      timeoutControl.restore();
+      deleteRoom(room.code);
+    }
   });
 
   test("handles sequential dual-disconnect and preserves remaining role timeout", async () => {

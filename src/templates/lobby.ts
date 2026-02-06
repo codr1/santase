@@ -51,22 +51,39 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
       </p>
     </main>
     <script>
+      const sseRootEl = document.querySelector("[sse-connect]");
       const gameStartListener = document.getElementById("game-start-listener");
       const lobbyStatusEl = document.getElementById("lobby-status");
       ${renderIsHostDetectionSource(isHost)}
       const opponentLabel = "Opponent";
+      let sseProcessingEnabled = true;
+
+      const disconnectSse = () => {
+        if (!sseRootEl || !window.htmx || typeof window.htmx.trigger !== "function") {
+          return;
+        }
+        window.htmx.trigger(sseRootEl, "htmx:beforeCleanupElement");
+      };
+
+      const cleanupBeforeRedirect = () => {
+        sseProcessingEnabled = false;
+        disconnectSse();
+      };
+
       if (gameStartListener) {
         console.log("[lobby] game-start listener attached");
         gameStartListener.addEventListener("htmx:afterSettle", (event) => {
           console.log("[lobby] SSE event", event.type, event.detail);
           const destination = gameStartListener.textContent?.trim() || ${gamePathJson};
           console.log("[lobby] redirect", destination);
+          cleanupBeforeRedirect();
           window.location.assign(destination);
         });
       }
       ${renderParseStatusPayloadSource()}
       ${renderUpdateStatusTextSource("lobbyStatusEl")}
       document.body.addEventListener("htmx:sseMessage", (event) => {
+        if (!sseProcessingEnabled) return;
         const detail = event.detail || {};
         if (detail.type !== "status") return;
         const parsed = parseStatusPayload(detail.data || "");

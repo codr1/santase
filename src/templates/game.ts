@@ -640,6 +640,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         updateGraceCountdown();
         graceCountdownIntervalId = window.setInterval(updateGraceCountdown, 100);
       };
+      const sseRootEl = document.querySelector("[sse-connect]");
+      let redirectingToResults = false;
+      let sseProcessingEnabled = true;
 
       const resetRoundEndModal = (clearReadyState = false) => {
         roundEndCountdownValue = roundEndCountdownStart;
@@ -668,7 +671,28 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         return state.matchScores[0] >= 11 || state.matchScores[1] >= 11;
       };
 
+      const disconnectSse = () => {
+        if (!sseRootEl || !window.htmx || typeof window.htmx.trigger !== "function") {
+          return;
+        }
+        window.htmx.trigger(sseRootEl, "htmx:beforeCleanupElement");
+      };
+
+      const cleanupBeforeRedirect = () => {
+        if (roundEndCountdownId !== null) {
+          window.clearInterval(roundEndCountdownId);
+          roundEndCountdownId = null;
+        }
+        sseProcessingEnabled = false;
+        disconnectSse();
+      };
+
       const redirectToResults = () => {
+        if (redirectingToResults) {
+          return;
+        }
+        redirectingToResults = true;
+        cleanupBeforeRedirect();
         window.location.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
       };
 
@@ -1965,6 +1989,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
       });
       document.body.addEventListener("htmx:sseMessage", (event) => {
+        if (!sseProcessingEnabled) return;
         const detail = event.detail || {};
         if (detail.type !== "ready-state") return;
         const payload = detail.data || "{}";
@@ -1985,6 +2010,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       });
 
       document.body.addEventListener("htmx:sseMessage", (event) => {
+        if (!sseProcessingEnabled) return;
         const detail = event.detail || {};
         if (detail.type !== "status") return;
         const payload = detail.data || "";
@@ -2011,6 +2037,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       });
 
       document.body.addEventListener("htmx:sseMessage", (event) => {
+        if (!sseProcessingEnabled) return;
         const detail = event.detail || {};
         if (detail.type !== "game-state") return;
         const payload = detail.data || "{}";

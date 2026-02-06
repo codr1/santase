@@ -37,6 +37,18 @@ describe("rooms storage", () => {
     expect(expiredLookup.status).toBe("expired");
   });
 
+  test("deleteRoom clears pending disconnect timeouts", () => {
+    const room = createRoom();
+    room.disconnectTimeouts.host = setTimeout(() => {}, 60_000);
+    room.disconnectTimeouts.guest = setTimeout(() => {}, 60_000);
+
+    const removed = deleteRoom(room.code);
+    expect(removed).toBe(true);
+    expect(room.disconnectTimeouts.host).toBeUndefined();
+    expect(room.disconnectTimeouts.guest).toBeUndefined();
+    expect(room.disconnectTimeouts).toEqual({});
+  });
+
   test("normalizeRoomCode handles whitespace, casing, and O/0 substitution", () => {
     const cases = [
       { input: " abcd ", expected: "ABCD" },
