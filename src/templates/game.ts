@@ -580,6 +580,7 @@ export function renderGamePage({
       const viewerIndex = ${playerIndex};
       const opponentIndex = ${opponentIndex};
       const roomCode = ${JSON.stringify(code)};
+      const hostToken = ${JSON.stringify(hostToken ?? null)};
       const initialState = ${JSON.stringify(viewerState)};
       const initialMatchOver = ${initialMatchOver ? "true" : "false"};
       const defaultDeclare66GracePeriodMs = ${DECLARE_66_GRACE_PERIOD_MS};
@@ -632,6 +633,7 @@ export function renderGamePage({
       let graceCountdownIntervalId = null;
       let graceCountdownDeadlineMs = null;
       let matchOverOverlayTimeoutId = null;
+      let trickResolutionTimeoutId = null;
 
       const roundResultLabels = ${JSON.stringify(ROUND_RESULT_LABELS)};
 
@@ -653,6 +655,7 @@ export function renderGamePage({
       const countdownEl = document.querySelector("[data-countdown]");
       const gameStatusEl = document.querySelector("#game-status");
       const readyButton = document.querySelector("[data-ready-btn]");
+      const newMatchButton = document.querySelector("[data-new-match-btn]");
       const opponentReadyEl = document.querySelector("[data-opponent-ready]");
       const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
       const matchCompleteEl = document.querySelector("[data-match-complete]");
@@ -677,6 +680,10 @@ export function renderGamePage({
         if (!actionNoticeEl) {
           return;
         }
+        if (actionNoticeTimeoutId !== null) {
+          window.clearTimeout(actionNoticeTimeoutId);
+          actionNoticeTimeoutId = null;
+        }
         actionNoticeEl.hidden = true;
         actionNoticeEl.textContent = "";
       };
@@ -692,8 +699,28 @@ export function renderGamePage({
         actionNoticeEl.hidden = false;
         actionNoticeTimeoutId = window.setTimeout(() => {
           hideActionNotice();
-          actionNoticeTimeoutId = null;
         }, actionNoticeAutoDismissMs);
+      };
+
+      const setNewMatchButtonIdle = () => {
+        if (!newMatchButton) {
+          return;
+        }
+        if (!hostToken) {
+          newMatchButton.disabled = true;
+          newMatchButton.textContent = "Host starts new match";
+          return;
+        }
+        newMatchButton.disabled = false;
+        newMatchButton.textContent = "New Match";
+      };
+
+      const setNewMatchButtonLoading = () => {
+        if (!newMatchButton) {
+          return;
+        }
+        newMatchButton.disabled = true;
+        newMatchButton.textContent = "Starting new match...";
       };
 
       const stopGraceCountdown = () => {
@@ -775,6 +802,10 @@ export function renderGamePage({
         if (matchOverOverlayTimeoutId !== null) {
           window.clearTimeout(matchOverOverlayTimeoutId);
           matchOverOverlayTimeoutId = null;
+        }
+        if (trickResolutionTimeoutId !== null) {
+          window.clearTimeout(trickResolutionTimeoutId);
+          trickResolutionTimeoutId = null;
         }
         sseProcessingEnabled = false;
         disconnectSse();
@@ -870,7 +901,15 @@ export function renderGamePage({
         if (viewFullResultsLink) {
           viewFullResultsLink.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
         }
+        setNewMatchButtonIdle();
         matchOverOverlay.removeAttribute("hidden");
+      };
+
+      const hideMatchOverOverlay = () => {
+        if (!matchOverOverlay) {
+          return;
+        }
+        matchOverOverlay.setAttribute("hidden", "");
       };
 
       const showMatchOverOverlayAfterDelay = (
@@ -1730,6 +1769,87 @@ export function renderGamePage({
           followerSlot.innerHTML = renderEmptyCardSlot();
         }
       };
+      const applyStateToBoard = (nextState, previousState = null) => {
+        const nextGame = nextState.game;
+        const previousGame = previousState?.game ?? null;
+        if (!areTricksEqual(getDisplayTrick(nextGame), getDisplayTrick(previousGame))) {
+          updateTrickArea(nextGame, previousGame);
+        }
+        const trickResolution = previousGame ? detectTrickResolution(previousGame, nextGame) : null;
+        if (trickResolution) {
+          animateTrickResolution(trickResolution.trick, trickResolution.winnerIndex);
+        }
+        if (
+          !previousGame ||
+          getActivePlayerIndex(nextGame) !== getActivePlayerIndex(previousGame) ||
+          !areHandsEqual(nextGame.playerHands[viewerIndex], previousGame.playerHands[viewerIndex])
+        ) {
+          updatePlayerHand(nextGame.playerHands[viewerIndex], nextGame);
+        }
+        const nextOpponentHandCount = getHandCount(nextGame.playerHands[opponentIndex]);
+        const previousOpponentHandCount = getHandCount(previousGame?.playerHands?.[opponentIndex]);
+        if (!previousGame || nextOpponentHandCount !== previousOpponentHandCount) {
+          updateOpponentHand(nextOpponentHandCount);
+        }
+        if (!previousGame || !areOptionalCardsEqual(nextGame.trumpCard, previousGame.trumpCard)) {
+          updateTrumpCard(nextGame.trumpCard);
+        }
+        const nextStockCount = getStockCount(nextGame.stock);
+        const previousStockCount = getStockCount(previousGame?.stock);
+        if (!previousGame || nextStockCount !== previousStockCount) {
+          updateStockPile(nextStockCount);
+        }
+        const playerWonCount = nextGame.wonTricks[viewerIndex].length;
+        const opponentWonCount = nextGame.wonTricks[opponentIndex].length;
+        const previousPlayerWonCount = previousGame?.wonTricks?.[viewerIndex]?.length ?? 0;
+        const previousOpponentWonCount = previousGame?.wonTricks?.[opponentIndex]?.length ?? 0;
+        if (!previousGame || playerWonCount !== previousPlayerWonCount) {
+          updateWonPile("[data-player-won-pile]", playerWonCount, "Your won pile");
+          updateWonCounts(viewerIndex, playerWonCount);
+        }
+        if (!previousGame || opponentWonCount !== previousOpponentWonCount) {
+          updateWonPile("[data-opponent-won-pile]", opponentWonCount, "Opponent won pile");
+          updateWonCounts(opponentIndex, opponentWonCount);
+        }
+        updateScores(nextState, previousState);
+        updateExchangeTrumpButton(nextState);
+        updateCloseDeckButton(nextState);
+        updateDeclare66Button(nextState);
+      };
+
+      const isFreshMatchState = (state) => {
+        const scores = state?.matchScores;
+        return (
+          Array.isArray(scores) &&
+          scores[0] === 0 &&
+          scores[1] === 0 &&
+          !state?.game?.roundResult
+        );
+      };
+
+      const resetUiForFreshMatch = (nextState) => {
+        hideRoundEndModal();
+        hideMatchOverOverlay();
+        hideActionNotice();
+        setNewMatchButtonIdle();
+        redirectingToResults = false;
+        pendingTrickResolutionKey = null;
+        readyRequestPending = false;
+        nextRoundRequestPending = false;
+        if (trickResolutionTimeoutId !== null) {
+          window.clearTimeout(trickResolutionTimeoutId);
+          trickResolutionTimeoutId = null;
+        }
+        if (matchOverOverlayTimeoutId !== null) {
+          window.clearTimeout(matchOverOverlayTimeoutId);
+          matchOverOverlayTimeoutId = null;
+        }
+        stopGraceCountdown();
+        stopRoundEndCountdown();
+        latestReadyState = null;
+        clearTrickArea();
+        applyStateToBoard(nextState, null);
+      };
       const detectTrickResolution = (prevGame, nextGame) => {
         if (!prevGame?.currentTrick || !nextGame || nextGame.currentTrick) {
           return null;
@@ -1766,7 +1886,12 @@ export function renderGamePage({
           return;
         }
         pendingTrickResolutionKey = trickKeyValue;
-        window.setTimeout(() => {
+        if (trickResolutionTimeoutId !== null) {
+          window.clearTimeout(trickResolutionTimeoutId);
+          trickResolutionTimeoutId = null;
+        }
+        trickResolutionTimeoutId = window.setTimeout(() => {
+          trickResolutionTimeoutId = null;
           if (pendingTrickResolutionKey !== trickKeyValue) {
             return;
           }
@@ -2138,6 +2263,51 @@ export function renderGamePage({
             updateReadyButtonState(latestReadyState);
           });
         }
+        if (newMatchButton) {
+          newMatchButton.addEventListener("click", async () => {
+            if (!hostToken) {
+              showActionNotice("Only the host can start a new match.");
+              return;
+            }
+            if (isMatchOver(currentState) !== true) {
+              return;
+            }
+            if (newMatchButton.disabled) {
+              return;
+            }
+            setNewMatchButtonLoading();
+            try {
+              const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/new-match", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ hostToken }),
+              });
+              if (!response.ok) {
+                const responseText = await response.text().catch(() => "");
+                let errorMessage = "";
+                if (responseText) {
+                  try {
+                    const parsedBody = JSON.parse(responseText);
+                    if (typeof parsedBody?.error === "string") {
+                      errorMessage = parsedBody.error;
+                    }
+                  } catch {
+                    errorMessage = responseText;
+                  }
+                }
+                throw new Error(errorMessage || "Could not start a new match.");
+              }
+            } catch (error) {
+              const message =
+                error instanceof Error && error.message
+                  ? error.message
+                  : "Could not start a new match.";
+              showActionNotice(message);
+              setNewMatchButtonIdle();
+            }
+          });
+        }
         if (returnHomeLink) {
           returnHomeLink.addEventListener("click", (event) => {
             event.preventDefault();
@@ -2152,6 +2322,8 @@ export function renderGamePage({
           showMatchOverOverlay(currentState, viewerIndex);
         } else if (currentState?.game?.roundResult) {
           showRoundEndModal(currentState);
+        } else {
+          hideMatchOverOverlay();
         }
         if (!window.gsap) {
           return;
@@ -2248,6 +2420,18 @@ export function renderGamePage({
           return;
         }
 
+        const shouldResetForFreshMatch = isFreshMatchState(parsedState) && (
+          isMatchOver(currentState) ||
+          Boolean(currentState?.game?.roundResult) ||
+          (roundEndModal && !roundEndModal.hasAttribute("hidden")) ||
+          (matchOverOverlay && !matchOverOverlay.hasAttribute("hidden"))
+        );
+        if (shouldResetForFreshMatch) {
+          currentState = parsedState;
+          resetUiForFreshMatch(parsedState);
+          return;
+        }
+
         if (isMatchOver(parsedState) && !parsedState.game.roundResult) {
           currentState = parsedState;
           if (parsedState.draw === true) {
@@ -2268,70 +2452,7 @@ export function renderGamePage({
         } else if (trickJustCompleted) {
           startGraceCountdown(parsedState.declare66GracePeriodMs);
         }
-
-        if (
-          !currentGame ||
-          !areTricksEqual(getDisplayTrick(currentGame), getDisplayTrick(nextGame))
-        ) {
-          updateTrickArea(nextGame, currentGame);
-        }
-        const trickResolution = currentGame ? detectTrickResolution(currentGame, nextGame) : null;
-        if (trickResolution) {
-          animateTrickResolution(trickResolution.trick, trickResolution.winnerIndex);
-        }
-
-        const nextActivePlayer = getActivePlayerIndex(nextGame);
-        const currentActivePlayer = getActivePlayerIndex(currentGame);
-        if (
-          !currentGame ||
-          currentActivePlayer !== nextActivePlayer ||
-          !areHandsEqual(currentGame.playerHands[viewerIndex], nextGame.playerHands[viewerIndex])
-        ) {
-          updatePlayerHand(nextGame.playerHands[viewerIndex], nextGame);
-        }
-
-        if (
-          !currentGame ||
-          getHandCount(currentGame.playerHands[opponentIndex]) !==
-            getHandCount(nextGame.playerHands[opponentIndex])
-        ) {
-          updateOpponentHand(getHandCount(nextGame.playerHands[opponentIndex]));
-        }
-
-        if (!currentGame || !areCardsEqual(currentGame.trumpCard, nextGame.trumpCard)) {
-          updateTrumpCard(nextGame.trumpCard);
-        }
-
-        if (!currentGame || getStockCount(currentGame.stock) !== getStockCount(nextGame.stock)) {
-          updateStockPile(getStockCount(nextGame.stock));
-        }
-
-        if (
-          !currentGame ||
-          currentGame.wonTricks[viewerIndex].length !== nextGame.wonTricks[viewerIndex].length
-        ) {
-          const nextCount = nextGame.wonTricks[viewerIndex].length;
-          updateWonPile("[data-player-won-pile]", nextCount, "Your won pile");
-          updateWonCounts(viewerIndex, nextCount);
-        }
-
-        if (
-          !currentGame ||
-          currentGame.wonTricks[opponentIndex].length !== nextGame.wonTricks[opponentIndex].length
-        ) {
-          const nextCount = nextGame.wonTricks[opponentIndex].length;
-          updateWonPile(
-            "[data-opponent-won-pile]",
-            nextCount,
-            "Opponent won pile",
-          );
-          updateWonCounts(opponentIndex, nextCount);
-        }
-
-        updateScores(parsedState, currentState);
-        updateExchangeTrumpButton(parsedState);
-        updateCloseDeckButton(parsedState);
-        updateDeclare66Button(parsedState);
+        applyStateToBoard(parsedState, currentState);
 
         currentState = parsedState;
         if (roundEndModal) {

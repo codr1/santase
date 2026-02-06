@@ -376,6 +376,15 @@ export async function handleRequest(request: Request): Promise<Response> {
         return jsonError(resolution.error, resolution.status);
       }
       const room = resolution.room;
+      let payload: { hostToken?: unknown } | null = null;
+      try {
+        payload = await request.json();
+      } catch {
+        return jsonError("Invalid JSON payload.", 400);
+      }
+      if (typeof payload?.hostToken !== "string" || payload.hostToken !== room.hostToken) {
+        return jsonError("Only the host can start a new match.", 403);
+      }
       if (!isMatchOver(room.matchState)) {
         return jsonError("Match is not over.", 409);
       }

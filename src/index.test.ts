@@ -168,11 +168,15 @@ const postNextRound = async (roomCode: string, asHost: boolean) => {
   );
 };
 
-const postNewMatch = async (roomCode: string, asHost: boolean) => {
-  const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
+const postNewMatch = async (
+  roomCode: string,
+  hostToken: string | undefined = HOST_TOKEN,
+) => {
   return handleRequest(
-    new Request(`http://example/rooms/${roomCode}/new-match${hostQuery}`, {
+    new Request(`http://example/rooms/${roomCode}/new-match`, {
       method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(hostToken ? { hostToken } : {}),
     }),
   );
 };
@@ -1001,7 +1005,7 @@ describe("new match endpoint", () => {
       }
       await readSseEvents(hostReader, 1);
 
-      const response = await postNewMatch(room.code, true);
+      const response = await postNewMatch(room.code, HOST_TOKEN);
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ ok: true });
 
@@ -1038,13 +1042,33 @@ describe("new match endpoint", () => {
     room.matchState.matchScores = [10, 5];
 
     try {
-      const response = await postNewMatch(room.code, false);
+      const response = await postNewMatch(room.code, HOST_TOKEN);
       expect(response.status).toBe(409);
       expect(await response.json()).toEqual({
         ok: false,
         error: "Match is not over.",
       });
       expect(room.matchState.matchScores).toEqual([10, 5]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects reset when the caller is not the host", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [11, 2];
+
+    try {
+      const response = await postNewMatch(room.code, "invalid-host-token");
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: "Only the host can start a new match.",
+      });
+      expect(room.matchState.matchScores).toEqual([11, 2]);
     } finally {
       deleteRoom(room.code);
     }
