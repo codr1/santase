@@ -503,6 +503,71 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           </div>
         </div>
       </div>
+      <div
+        data-match-over-overlay
+        hidden
+        role="dialog"
+        aria-modal="true"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+      >
+        <div class="w-full max-w-xl rounded-xl bg-emerald-900 p-6 shadow-lg">
+          <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Match complete</p>
+          <h2 class="mt-2 text-2xl font-semibold" data-match-winner>Match complete</h2>
+
+          <div class="mt-4 grid gap-3">
+            <div class="flex items-center justify-between rounded-xl bg-emerald-950/70 px-4 py-3">
+              <span class="font-medium">You</span>
+              <span class="text-lg font-semibold" data-final-score-you>0</span>
+            </div>
+            <div class="flex items-center justify-between rounded-xl bg-emerald-900/40 px-4 py-3">
+              <span class="font-medium">Opponent</span>
+              <span class="text-lg font-semibold" data-final-score-opponent>0</span>
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-xl bg-emerald-950/50 p-4">
+            <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Last round result</p>
+            <div class="mt-3 grid gap-3">
+              <div class="flex items-center justify-between rounded-xl bg-emerald-950/70 px-4 py-3">
+                <span class="font-medium">Winner</span>
+                <span class="text-sm font-semibold" data-last-round-winner>Unknown</span>
+              </div>
+              <div class="flex items-center justify-between rounded-xl bg-emerald-900/40 px-4 py-3">
+                <span class="font-medium">Reason</span>
+                <span class="text-sm font-semibold" data-last-round-reason>Round complete</span>
+              </div>
+              <div class="flex items-center justify-between rounded-xl bg-emerald-950/70 px-4 py-3">
+                <span class="font-medium">Round scores</span>
+                <span class="text-sm font-semibold">
+                  You <span data-last-round-score-you>0</span> · Opponent
+                  <span data-last-round-score-opponent>0</span>
+                </span>
+              </div>
+              <div class="flex items-center justify-between rounded-xl bg-emerald-900/40 px-4 py-3">
+                <span class="font-medium">Game points</span>
+                <span class="text-sm font-semibold" data-last-round-game-points>0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              disabled
+              class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+              data-new-match-btn
+            >
+              New Match
+            </button>
+            <div class="flex items-center gap-4 text-sm">
+              <a href="/" class="font-semibold underline" data-return-home-link>Return Home</a>
+              <a href="/rooms/${encodeURIComponent(code)}/results" class="font-semibold underline" data-view-full-results-link>
+                View Full Results
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
     <script>
       const viewerIndex = ${playerIndex};
@@ -584,6 +649,17 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
       const matchCompleteEl = document.querySelector("[data-match-complete]");
       const resultsLink = document.querySelector("[data-results-link]");
+      const matchOverOverlay = document.querySelector("[data-match-over-overlay]");
+      const matchWinnerEl = document.querySelector("[data-match-winner]");
+      const finalScoreYouEl = document.querySelector("[data-final-score-you]");
+      const finalScoreOpponentEl = document.querySelector("[data-final-score-opponent]");
+      const lastRoundWinnerEl = document.querySelector("[data-last-round-winner]");
+      const lastRoundReasonEl = document.querySelector("[data-last-round-reason]");
+      const lastRoundScoreYouEl = document.querySelector("[data-last-round-score-you]");
+      const lastRoundScoreOpponentEl = document.querySelector("[data-last-round-score-opponent]");
+      const lastRoundGamePointsEl = document.querySelector("[data-last-round-game-points]");
+      const returnHomeLink = document.querySelector("[data-return-home-link]");
+      const viewFullResultsLink = document.querySelector("[data-view-full-results-link]");
       const actionNoticeEl = document.querySelector("[data-action-notice]");
       const graceCountdownEl = document.querySelector("[data-grace-countdown]");
       const actionNoticeAutoDismissMs = 4000;
@@ -721,6 +797,72 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return null;
         }
         return scoreA > scoreB ? 0 : 1;
+      };
+
+      const isForfeitMatch = (state) => {
+        return isMatchOver(state) && state?.draw !== true && !state?.game?.roundResult;
+      };
+
+      const getMatchWinnerMessage = (state, viewer) => {
+        const winnerIndex = getMatchWinnerIndex(state);
+        const viewerOpponent = viewer === 0 ? 1 : 0;
+        if (isForfeitMatch(state)) {
+          if (winnerIndex === viewer) {
+            return "Victory by forfeit";
+          }
+          if (winnerIndex === viewerOpponent) {
+            return "Defeat by forfeit";
+          }
+        }
+        if (winnerIndex === viewer) {
+          return "You won the match!";
+        }
+        if (winnerIndex === viewerOpponent) {
+          return "Opponent won the match!";
+        }
+        return "Match complete";
+      };
+
+      const showMatchOverOverlay = (state, viewer) => {
+        if (!matchOverOverlay) {
+          return;
+        }
+        const viewerOpponent = viewer === 0 ? 1 : 0;
+        const roundResult = state?.game?.roundResult;
+        const winnerIndex = getMatchWinnerIndex(state);
+        const roundWinnerText = roundResult
+          ? roundResult.winner === viewer
+            ? "You"
+            : "Opponent"
+          : winnerIndex === viewer
+            ? "You"
+            : winnerIndex === viewerOpponent
+              ? "Opponent"
+              : "Unknown";
+        const roundReasonText = state?.draw === true
+          ? "Both players disconnected"
+          : roundResult
+            ? roundResultLabels[roundResult.reason] ?? "Round complete"
+            : isForfeitMatch(state)
+              ? "Forfeit"
+              : "Round complete";
+        const roundScoreYou = state?.game?.roundScores?.[viewer];
+        const roundScoreOpponent = state?.game?.roundScores?.[viewerOpponent];
+        setText(matchWinnerEl, getMatchWinnerMessage(state, viewer));
+        setText(finalScoreYouEl, state?.matchScores?.[viewer] ?? 0);
+        setText(finalScoreOpponentEl, state?.matchScores?.[viewerOpponent] ?? 0);
+        setText(lastRoundWinnerEl, roundWinnerText);
+        setText(lastRoundReasonEl, roundReasonText);
+        setText(lastRoundScoreYouEl, Number.isFinite(roundScoreYou) ? roundScoreYou : "-");
+        setText(lastRoundScoreOpponentEl, Number.isFinite(roundScoreOpponent) ? roundScoreOpponent : "-");
+        setText(
+          lastRoundGamePointsEl,
+          roundResult ? roundResult.gamePoints : state?.draw === true ? 0 : "-",
+        );
+        if (viewFullResultsLink) {
+          viewFullResultsLink.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
+        }
+        matchOverOverlay.removeAttribute("hidden");
       };
 
       const updateRoundEndModal = (state) => {
@@ -1978,6 +2120,13 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               readyRequestPending = false;
             }
             updateReadyButtonState(latestReadyState);
+          });
+        }
+        if (returnHomeLink) {
+          returnHomeLink.addEventListener("click", (event) => {
+            event.preventDefault();
+            cleanupBeforeRedirect();
+            window.location.href = "/";
           });
         }
         updateExchangeTrumpButton(currentState);
