@@ -5,6 +5,7 @@ import {
   canCloseDeck as canCloseDeckCheck,
   canDeclare66,
   canExchangeTrump9,
+  DECLARE_66_GRACE_PERIOD_MS,
   getViewerMatchState,
 } from "../game";
 import type { Card, Suit } from "../game/cards";
@@ -495,7 +496,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentIndex = ${opponentIndex};
       const roomCode = ${JSON.stringify(code)};
       const initialState = ${JSON.stringify(viewerState)};
-      const defaultDeclare66GracePeriodMs = 2600;
+      const defaultDeclare66GracePeriodMs = ${DECLARE_66_GRACE_PERIOD_MS};
       const declare66GracePeriodMs = Number.isFinite(initialState?.declare66GracePeriodMs)
         ? Math.max(0, Number(initialState.declare66GracePeriodMs))
         : defaultDeclare66GracePeriodMs;
