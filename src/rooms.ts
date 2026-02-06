@@ -22,6 +22,7 @@ export type Room = {
   forfeit: boolean;
   lastActivity: number;
   createdAt: number;
+  lastTrickCompletedAt: number | null;
   matchState: MatchState;
 };
 
@@ -77,6 +78,7 @@ export function createRoom(): Room {
         forfeit: false,
         lastActivity: now,
         createdAt: now,
+        lastTrickCompletedAt: null,
         matchState,
       };
       rooms.set(code, room);
