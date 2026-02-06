@@ -6,7 +6,7 @@ import { renderLobbyPage } from "./templates/lobby";
 import { renderGamePage } from "./templates/game";
 import { renderResultsPage } from "./templates/results";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
-import { broadcastGameState, broadcastReadyState, handleSse } from "./sse";
+import { broadcastGameState, broadcastReadyState, clearRoomDisconnectTimeouts, handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
 import {
   calculateGamePoints,
@@ -19,6 +19,7 @@ import {
   declare66,
   declareMarriage,
   exchangeTrump9,
+  initializeMatch,
   isMatchOver,
   playTrick,
   startNewRound,
@@ -362,6 +363,31 @@ export async function handleRequest(request: Request): Promise<Response> {
       room.matchState = startNewRound(room.matchState, game.roundResult.winner);
       room.hostReady = false;
       room.guestReady = false;
+      touchRoom(normalizedCode);
+      broadcastGameState(normalizedCode, room.matchState);
+      return jsonResponse({ ok: true }, 200);
+    }
+
+    const newMatchMatch = path.match(/^\/rooms\/([^/]+)\/new-match$/);
+    if (newMatchMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(newMatchMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return jsonError(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      if (!isMatchOver(room.matchState)) {
+        return jsonError("Match is not over.", 409);
+      }
+
+      room.matchState = initializeMatch();
+      room.forfeit = false;
+      room.draw = false;
+      room.hostReady = false;
+      room.guestReady = false;
+      clearRoomDisconnectTimeouts(room);
+      room.lastTrickCompletedAt = null;
+
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);
       return jsonResponse({ ok: true }, 200);
