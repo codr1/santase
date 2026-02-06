@@ -1,19 +1,13 @@
 import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import { getMatchWinner, type MatchState } from "../game";
+import { ROUND_RESULT_LABELS } from "./shared-constants";
 
 type ResultsOptions = {
   code: string;
   matchState: MatchState;
   viewerIndex: 0 | 1;
   forfeit: boolean;
-};
-
-const ROUND_RESULT_LABELS: Record<string, string> = {
-  declared_66: "Declared 66",
-  false_declaration: "False declaration",
-  exhausted: "Last trick winner",
-  closed_failed: "Failed to close",
 };
 
 export function renderResultsPage({
