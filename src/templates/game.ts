@@ -1434,6 +1434,23 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         updateExchangeTrumpButton(parsedState);
         updateCloseDeckButton(parsedState);
 
+        const playerRoundScore = document.querySelector("[data-player-round-score]");
+        if (playerRoundScore) {
+          playerRoundScore.textContent = String(nextGame.roundScores[viewerIndex]);
+        }
+        const opponentRoundScore = document.querySelector("[data-opponent-round-score]");
+        if (opponentRoundScore) {
+          opponentRoundScore.textContent = String(nextGame.roundScores[opponentIndex]);
+        }
+        const playerMatchScore = document.querySelector("[data-player-match-score]");
+        if (playerMatchScore) {
+          playerMatchScore.textContent = String(parsedState.matchScores[viewerIndex]);
+        }
+        const opponentMatchScore = document.querySelector("[data-opponent-match-score]");
+        if (opponentMatchScore) {
+          opponentMatchScore.textContent = String(parsedState.matchScores[opponentIndex]);
+        }
+
         currentState = parsedState;
       });
     </script>
