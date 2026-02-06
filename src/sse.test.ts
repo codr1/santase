@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { getViewerMatchState } from "./game";
 import { createRoom, deleteRoom } from "./rooms";
 import { handleSse } from "./sse";
 
@@ -105,7 +106,9 @@ describe("SSE status broadcasting", () => {
     const statusAfterGuest = guestConnectEvents.find((event) => event.event === "status");
     expect(connectedEvent?.data).toBe("guest");
     expect(gameStartAfterGuest?.data).toBe(`/rooms/${room.code}/game`);
-    expect(gameStateAfterGuest?.data).toBe(JSON.stringify(room.matchState));
+    expect(gameStateAfterGuest?.data).toBe(
+      JSON.stringify(getViewerMatchState(room.matchState, room.hostPlayerIndex)),
+    );
     expect(statusAfterGuest?.data).toBe(
       '<span data-host-connected="true" data-guest-connected="true">Opponent connected</span>',
     );

@@ -18,6 +18,7 @@ export {
   isMatchOver,
   getMatchWinner,
   dealInitialHands,
+  getViewerMatchState,
   getStockCount,
   canCloseDeck,
   closeDeck,

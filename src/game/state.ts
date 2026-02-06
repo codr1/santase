@@ -56,6 +56,19 @@ export type MatchState = {
   leaderIndex: 0 | 1;
 };
 
+export function getViewerMatchState(matchState: MatchState, viewerIndex: 0 | 1): MatchState {
+  const opponentIndex = viewerIndex === 0 ? 1 : 0;
+  const roundScores: [number, number] = [...matchState.game.roundScores];
+  roundScores[opponentIndex] = Number.NaN;
+  return {
+    ...matchState,
+    game: {
+      ...matchState.game,
+      roundScores,
+    },
+  };
+}
+
 function randomDealerIndex(): 0 | 1 {
   const values = crypto.getRandomValues(new Uint32Array(1));
   return (values[0] % 2) as 0 | 1;

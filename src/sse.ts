@@ -1,5 +1,5 @@
 import { deleteRoom, forfeitMatch, getRoom, touchRoom, type Room } from "./rooms";
-import { isMatchOver, type MatchState } from "./game";
+import { getViewerMatchState, isMatchOver, type MatchState } from "./game";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const DISCONNECT_FORFEIT_TIMEOUT_MS = 30_000;
@@ -8,6 +8,7 @@ type ClientRole = "host" | "guest";
 
 type SseClient = {
   role: ClientRole;
+  viewerIndex: 0 | 1;
   controller: ReadableStreamDefaultController<Uint8Array>;
   heartbeat: ReturnType<typeof setInterval> | null;
 };
@@ -63,7 +64,20 @@ function startGame(roomCode: string): void {
 }
 
 export function broadcastGameState(roomCode: string, matchState: MatchState): void {
-  broadcast(roomCode, "game-state", JSON.stringify(matchState));
+  const clients = clientsByRoom.get(roomCode);
+  if (!clients || clients.size === 0) {
+    return;
+  }
+  for (const client of clients) {
+    const visibleState = getViewerMatchState(matchState, client.viewerIndex);
+    const payload = encodeEvent("game-state", JSON.stringify(visibleState));
+    try {
+      client.controller.enqueue(payload);
+    } catch {
+      // Ignore enqueue errors for closed streams.
+    }
+  }
+  touchRoom(roomCode);
 }
 
 export function broadcastReadyState(
@@ -206,12 +220,14 @@ export function handleSse(request: Request, roomCode: string): Response {
   const { room } = lookup;
 
   const role = resolveRole(request.url, room.hostToken);
+  const viewerIndex: 0 | 1 = role === "host" ? room.hostPlayerIndex : room.hostPlayerIndex === 0 ? 1 : 0;
   let client: SseClient | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       client = {
         role,
+        viewerIndex,
         controller,
         heartbeat: null,
       };
