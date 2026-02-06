@@ -525,6 +525,7 @@ describe("startNewRound", () => {
     expect(nextState.game.wonTricks).toEqual([[], []]);
     expect(nextState.game.roundScores).toEqual([0, 0]);
     expect(nextState.game.isClosed).toBe(false);
+    expect(nextState.game.canDeclareWindow).toBeNull();
     expect(nextState.game.roundResult).toBeNull();
   };
 
@@ -601,6 +602,7 @@ describe("canDeclare66", () => {
   test("returns true when player has exactly 66 points", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD, 10];
+    state.canDeclareWindow = 0;
 
     expect(canDeclare66(state, 0)).toBe(true);
   });
@@ -608,6 +610,7 @@ describe("canDeclare66", () => {
   test("returns true when player is above 66 points", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD + 6, 0];
+    state.canDeclareWindow = 0;
 
     expect(canDeclare66(state, 0)).toBe(true);
   });
@@ -615,6 +618,7 @@ describe("canDeclare66", () => {
   test("returns false when player is below 66 points", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD - 1, DECLARE_THRESHOLD + 14];
+    state.canDeclareWindow = 0;
 
     expect(canDeclare66(state, 0)).toBe(false);
   });
@@ -622,13 +626,31 @@ describe("canDeclare66", () => {
   test("returns true when player two meets the threshold", () => {
     const state = makeState([[], []]);
     state.roundScores = [10, DECLARE_THRESHOLD];
+    state.canDeclareWindow = 1;
 
     expect(canDeclare66(state, 1)).toBe(true);
+  });
+
+  test("returns false when the declaration window is for the other player", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD + 4, 10];
+    state.canDeclareWindow = 1;
+
+    expect(canDeclare66(state, 0)).toBe(false);
+  });
+
+  test("returns false when the declaration window is closed", () => {
+    const state = makeState([[], []]);
+    state.roundScores = [DECLARE_THRESHOLD + 4, 10];
+    state.canDeclareWindow = null;
+
+    expect(canDeclare66(state, 0)).toBe(false);
   });
 
   test("returns false when the round already ended", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD, 0];
+    state.canDeclareWindow = 0;
     state.roundResult = {
       winner: 0,
       gamePoints: 3,
@@ -748,7 +770,7 @@ describe("declare66", () => {
     });
   });
 
-  test("penalizes a false declaration with 3 game points", () => {
+  test("penalizes a false declaration with 2 game points", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD - 1, 10];
 
@@ -756,7 +778,7 @@ describe("declare66", () => {
 
     expect(nextState.roundResult).toEqual({
       winner: 1,
-      gamePoints: 3,
+      gamePoints: 2,
       reason: "false_declaration",
     });
   });
@@ -807,7 +829,7 @@ describe("declare66", () => {
 
     expect(nextState.roundResult).toEqual({
       winner: 0,
-      gamePoints: 3,
+      gamePoints: 2,
       reason: "false_declaration",
     });
   });
@@ -1043,6 +1065,7 @@ function makeState(
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages,
+    canDeclareWindow: null,
     roundResult: null,
   };
 }
@@ -1072,6 +1095,7 @@ function makeTrickState({
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
+    canDeclareWindow: null,
     roundResult: null,
   };
 }
@@ -1192,6 +1216,20 @@ describe("declareMarriage", () => {
     expect(nextState.declaredMarriages).toEqual(["clubs"]);
     expect(nextState.roundScores[0]).toBe(MARRIAGE_POINTS);
     expect(state.declaredMarriages).toEqual([]);
+  });
+
+  test("opens the declare window for the declaring player", () => {
+    const state = makeState([
+      [
+        { suit: "hearts", rank: "K" },
+        { suit: "hearts", rank: "Q" },
+      ],
+      [],
+    ]);
+
+    const nextState = declareMarriage(state, 0, "hearts");
+
+    expect(nextState.canDeclareWindow).toBe(0);
   });
 
   test("awards trump marriage points when suit matches trump", () => {
@@ -1414,6 +1452,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      canDeclareWindow: null,
       roundResult: null,
     };
 
@@ -1432,6 +1471,7 @@ describe("playTrick", () => {
     ]);
     expect(nextState.wonTricks[1]).toEqual([]);
     expect(nextState.roundScores).toEqual([11, 0]);
+    expect(nextState.canDeclareWindow).toBe(0);
     expect(nextState.lastCompletedTrick).toEqual({
       leaderIndex: 0,
       leaderCard: { suit: "hearts", rank: "A" },
@@ -1456,6 +1496,7 @@ describe("playTrick", () => {
       ],
       roundScores: [10, 5],
       declaredMarriages: [],
+      canDeclareWindow: null,
       roundResult: null,
     };
 
@@ -1475,6 +1516,7 @@ describe("playTrick", () => {
     ]);
     expect(nextState.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
     expect(nextState.roundScores).toEqual([20, 5]);
+    expect(nextState.canDeclareWindow).toBe(0);
     expect(nextState.lastCompletedTrick).toEqual({
       leaderIndex: 1,
       leaderCard: { suit: "hearts", rank: "10" },
@@ -1496,6 +1538,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      canDeclareWindow: null,
       roundResult: null,
     };
 
@@ -1523,6 +1566,7 @@ describe("playTrick", () => {
       wonTricks: [[], []],
       roundScores: [0, 0],
       declaredMarriages: [],
+      canDeclareWindow: null,
       roundResult: null,
     };
 

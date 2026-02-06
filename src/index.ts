@@ -380,6 +380,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           ...updatedGame,
           playerHands: nextHands,
           currentTrick: { leaderIndex: game.leader, leaderCard: card },
+          canDeclareWindow: marriageSuit ? playerIndex : null,
         };
         room.matchState = { ...room.matchState, game: nextGame };
         touchRoom(normalizedCode);
@@ -449,6 +450,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           leaderCard: currentTrick.leaderCard,
           followerCard: card,
         },
+        canDeclareWindow: winnerIndex,
       };
 
       nextGame = drawFromStock(nextGame, winnerIndex);

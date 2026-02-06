@@ -19,6 +19,7 @@ const buildGameState = (overrides: Partial<GameState> = {}): GameState => {
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
+    canDeclareWindow: null,
     roundResult: null,
   };
 
