@@ -103,7 +103,7 @@ Server-Sent Events for real-time communication.
 | `connected` | all | `"guest"` when guest first joins |
 | `status` | all | Lobby status HTML (`<span>` with connection state) |
 | `game-start` | all | Game URL path for redirect |
-| `game-state` | all | JSON-serialized `MatchState` for real-time updates |
+| `game-state` | all | JSON-serialized `ViewerMatchState` for real-time updates |
 | `ready-state` | all | JSON `{hostReady, guestReady}` when a player marks ready |
 
 ## Play Endpoint
@@ -140,8 +140,8 @@ Player index determined by `hostToken` query param or `hostToken-{code}` cookie 
 
 - **Declare-66 grace period**: When the leader plays after a trick completes, a 2.6-second grace period is enforced (returns 409 "Please wait before playing") to give the player time to declare 66; `lastTrickCompletedAt` is set on trick completion and cleared on round end or declaration
 - Validates card is in player's hand
-- For leader: sets `currentTrick` with played card; processes marriage if declared
-- For follower: enforces follow-suit rules when deck is closed/exhausted; resolves trick winner, awards points, triggers draw from stock
+- For leader: sets `currentTrick` with played card; processes marriage if declared; clears `canDeclareWindow` when no marriage is declared
+- For follower: delegates to `playTrick()` which enforces follow-suit rules when deck is closed/exhausted, resolves trick winner, awards points, and draws from stock
 - Ends round when hands exhausted: applies game points to match scores immediately (3 points if closer failed, otherwise `calculateGamePoints` based on loser's score)
 - Broadcasts `game-state` to all connected clients
 
@@ -199,12 +199,12 @@ Same as play endpoint (hostToken query param or cookie).
 
 | Status | Condition |
 |--------|-----------|
-| 200 | Declaration successful |
-| 409 | Cannot declare (below 66, window closed, round/match already ended) |
+| 200 | Declaration successful (or false declaration penalized) |
+| 409 | Cannot declare (window closed, round/match already ended) |
 
 ### Behavior
 
-- Validates player can declare via `canDeclare66` (requires ≥66 points and open declaration window for that player)
+- Validates player can declare via `canDeclare66` (requires open declaration window for that player; does not require ≥66 points)
 - Calls `declare66` to produce round result; if player truly has ≥66, they win; otherwise opponent wins with 2 game points (false declaration)
 - Applies round result game points to match scores immediately
 - Resets `lastTrickCompletedAt` to null
@@ -300,8 +300,10 @@ Renders the interactive game board with viewer-specific perspective.
 - **Won trick/card counters**: Numeric displays for each player's won tricks and won card counts, updated in real-time
 - **Trump 9 exchange button**: Shown when the player can exchange (is leader, holds trump 9, stock has 3+ cards, no trick in progress); sends POST to `/rooms/:code/exchange-trump`; optimistically updates hand and trump card
 - **Close deck button**: Shown when the player can close (is leader, no trick in progress, stock has 3+ cards, deck not already closed, trump card exists); sends POST to `/rooms/:code/close-deck`; visibility updated in real-time via client-side state checks
-- **Declare 66 button**: Shown when `canDeclare66` is true for the viewer (has ≥66 points and declaration window is open); sends POST to `/rooms/:code/declare-66`; visibility updated in real-time via client-side state checks
-- **Opponent score hiding**: Game state sent to each viewer via `getViewerMatchState` replaces the opponent's round score with NaN, preventing clients from seeing the other player's exact round score
+- **Declare 66 button**: Shown when `canDeclare66` is true for the viewer (declaration window is open); styled with rose/red color; sends POST to `/rooms/:code/declare-66`; visibility updated in real-time via client-side state checks; displays error toast on failed attempts
+- **Declare 66 grace countdown**: After a trick completes, a countdown ("Leader can play in X.Xs") is shown; stops when the next trick starts or the round ends; duration controlled by `declare66GracePeriodMs` from server state
+- **Action notice toast**: Fixed-position notification element (top-right) for transient error feedback; auto-dismisses after 4 seconds; used for declare-66 failures
+- **Opponent info hiding**: Game state sent to each viewer via `getViewerMatchState` replaces the opponent's hand with `{count}`, stock with `{count}`, and the opponent's round score with NaN, preventing clients from seeing hidden information
 - **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, won pile displays, trick area, won counters, round scores, and match scores without full page reload; uses GSAP animations for card additions/removals
 - **Click-to-play**: Player cards are clickable when it's the player's turn; clicking sends POST to `/rooms/:code/play`; automatically declares marriage when leading with K or Q of a declareable suit
 - **Round-end modal**: Shown when a round ends; displays round winner, reason, round/match scores, and game points earned; includes a 10-second countdown timer and a "Ready" button that sends POST to `/rooms/:code/ready`; when countdown expires, sends POST to `/rooms/:code/next-round`; shows opponent ready state via `ready-state` SSE events; pauses countdown when opponent disconnects; redirects to `/rooms/:code/results` when match is over
@@ -328,6 +330,8 @@ type Card = { suit: Suit; rank: Rank };
 **Marriage points**: Regular=20, Trump=40
 
 **Declaration threshold**: 66 points
+
+**Declare 66 grace period**: `DECLARE_66_GRACE_PERIOD_MS = 2600` (exported from `src/game/config.ts`; used by server for play-delay enforcement and sent to clients in `ViewerMatchState`)
 
 **Functions**:
 - `createDeck()`: Returns ordered 24-card deck
@@ -361,6 +365,24 @@ type RoundResult = {
   gamePoints: 1 | 2 | 3;
   reason: "declared_66" | "false_declaration" | "exhausted" | "closed_failed";
 };
+
+type HiddenCards = { count: number };
+
+type ViewerGameState = Omit<GameState, "playerHands" | "stock"> & {
+  playerHands: [Card[] | HiddenCards, Card[] | HiddenCards];
+  stock: HiddenCards;
+};
+
+type ViewerMatchState = Omit<MatchState, "game"> & {
+  game: ViewerGameState;
+  declare66GracePeriodMs: number;
+};
+
+type PlayTrickResult = {
+  game: GameState;
+  winnerIndex: 0 | 1;
+  trickPoints: number;
+};
 ```
 
 **Functions**:
@@ -368,7 +390,7 @@ type RoundResult = {
 - `getStockCount(state)`: Returns number of cards remaining in stock
 - `canCloseDeck(state, playerIndex)`: Returns true when player is the leader, no trick is in progress, stock has 3+ cards, deck is not already closed, trump card exists, and round hasn't ended
 - `closeDeck(state, playerIndex)`: Sets `isClosed` to true and `closedBy` to the closing player; delegates to `canCloseDeck` for validation and throws specific errors (trick in progress, not leader, stock too small, already closed, no trump card)
-- `canDeclare66(state, playerIndex)`: Returns true if player has ≥66 points, round hasn't ended, and the declaration window is open for that player
+- `canDeclare66(state, playerIndex)`: Returns true if the round hasn't ended and the declaration window is open for that player (does not check score threshold; declaring below 66 results in a false declaration penalty)
 - `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 2 game points
 - `calculateGamePoints(opponentScore)`: Returns game points based on opponent score: 3 if 0, 2 if 1-32, 1 if ≥33
 - `calculateWinPoints(state, closerIndex?)`: Returns win points for the round; if closer loses, returns 3 (penalty); otherwise uses calculateGamePoints
@@ -379,7 +401,7 @@ type RoundResult = {
 - `findDeclareableMarriages(state, playerIndex)`: Returns array of suits player can declare
 - `declareMarriage(state, playerIndex, suit)`: Returns new GameState with marriage declared and points added; opens `canDeclareWindow` for the declaring player
 - `isDeckClosedOrExhausted(state)`: Returns true if deck is closed or stock is empty
-- `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; sets `lastCompletedTrick` and clears `currentTrick`; opens `canDeclareWindow` for the trick winner and clears any previous window; enforces follow-suit rules when deck is closed/exhausted; returns new GameState
+- `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; sets `lastCompletedTrick` and clears `currentTrick`; opens `canDeclareWindow` for the trick winner; enforces follow-suit rules when deck is closed/exhausted; calls `drawFromStock` internally; returns `PlayTrickResult` (`{ game, winnerIndex, trickPoints }`)
 - `drawFromStock(state, winnerIndex)`: After a trick, winner draws top stock card, loser draws next (or trump card on final draw); sets trumpCard to null when exhausted; no-op if stock empty
 - `getValidFollowerCards(hand, ledCard, trumpSuit, deckClosedOrExhausted)`: Returns valid cards follower can play; when deck is closed/exhausted, must head in led suit if possible, else play any led suit card, else play trump, else any card
 
@@ -403,4 +425,4 @@ type MatchState = {
 - `applyRoundResult(matchState, winnerIndex, points)`: Returns new MatchState with winner's score incremented
 - `isMatchOver(matchState)`: Returns true when either player has ≥11 points
 - `getMatchWinner(matchState)`: Returns winning player index (0 or 1) or null if match not over; throws if tied at ≥11
-- `getViewerMatchState(matchState, viewerIndex)`: Returns a copy of the match state with the opponent's round score replaced by NaN, hiding it from the viewer
+- `getViewerMatchState(matchState, viewerIndex)`: Returns a `ViewerMatchState` with the opponent's hand replaced by `{count}`, stock replaced by `{count}`, the opponent's round score replaced by NaN, and `declare66GracePeriodMs` included
