@@ -659,6 +659,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
 
       const isMatchOver = (state) => {
+        if (state?.draw === true) {
+          return true;
+        }
         if (!state?.matchScores) {
           return false;
         }

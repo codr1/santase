@@ -589,6 +589,12 @@ export async function handleRequest(request: Request): Promise<Response> {
         );
       }
       touchRoom(normalizedCode);
+      if (resolution.room.draw) {
+        return Response.redirect(
+          `/rooms/${encodeURIComponent(resolution.room.code)}/results`,
+          303,
+        );
+      }
       const viewerIndex = resolveViewerIndex(request, resolution.room);
       return htmlResponse(
         renderGamePage({
@@ -611,7 +617,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         );
       }
       touchRoom(normalizedCode);
-      if (!isMatchOver(resolution.room.matchState)) {
+      if (!isMatchOver(resolution.room.matchState) && !resolution.room.draw) {
         return Response.redirect(
           `/rooms/${encodeURIComponent(resolution.room.code)}/game`,
           303,
@@ -624,6 +630,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           matchState: resolution.room.matchState,
           viewerIndex,
           forfeit: resolution.room.forfeit,
+          draw: resolution.room.draw,
         }),
       );
     }

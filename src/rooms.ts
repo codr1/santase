@@ -17,9 +17,12 @@ export type Room = {
   guestEverJoined: boolean;
   hostReady: boolean;
   guestReady: boolean;
-  disconnectTimeout: ReturnType<typeof setTimeout> | null;
-  disconnectPendingRole: "host" | "guest" | null;
+  disconnectTimeouts: {
+    host?: ReturnType<typeof setTimeout>;
+    guest?: ReturnType<typeof setTimeout>;
+  };
   forfeit: boolean;
+  draw: boolean;
   lastActivity: number;
   createdAt: number;
   lastTrickCompletedAt: number | null;
@@ -73,9 +76,9 @@ export function createRoom(): Room {
         guestEverJoined: false,
         hostReady: false,
         guestReady: false,
-        disconnectTimeout: null,
-        disconnectPendingRole: null,
+        disconnectTimeouts: {},
         forfeit: false,
+        draw: false,
         lastActivity: now,
         createdAt: now,
         lastTrickCompletedAt: null,
@@ -167,6 +170,7 @@ export function forfeitMatch(room: Room, winnerIndex: 0 | 1): boolean {
     matchScores: nextScores,
   };
   room.forfeit = true;
+  room.draw = false;
   room.hostReady = false;
   room.guestReady = false;
   return true;
@@ -177,11 +181,15 @@ function removeRoom(code: string, reason: RoomDeleteReason, now = Date.now()): b
   if (!room) {
     return false;
   }
-  if (room.disconnectTimeout) {
-    clearTimeout(room.disconnectTimeout);
-    room.disconnectTimeout = null;
-    room.disconnectPendingRole = null;
+  const hostTimeout = room.disconnectTimeouts.host;
+  if (hostTimeout) {
+    clearTimeout(hostTimeout);
   }
+  const guestTimeout = room.disconnectTimeouts.guest;
+  if (guestTimeout) {
+    clearTimeout(guestTimeout);
+  }
+  room.disconnectTimeouts = {};
   rooms.delete(code);
   expiredRooms.set(code, { expiredAt: now, reason });
   console.log(`Room deleted (${reason}): ${code}`);

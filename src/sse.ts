@@ -2,7 +2,7 @@ import { deleteRoom, forfeitMatch, getRoom, touchRoom, type Room } from "./rooms
 import { getViewerMatchState, isMatchOver, type MatchState } from "./game";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
-const DISCONNECT_FORFEIT_TIMEOUT_MS = 30_000;
+export const DISCONNECT_FORFEIT_TIMEOUT_MS = 30_000;
 
 type ClientRole = "host" | "guest";
 
@@ -63,14 +63,19 @@ function startGame(roomCode: string): void {
   broadcast(roomCode, "game-start", destination);
 }
 
-export function broadcastGameState(roomCode: string, matchState: MatchState): void {
+export function broadcastGameState(
+  roomCode: string,
+  matchState: MatchState,
+  options: { draw?: boolean } = {},
+): void {
   const clients = clientsByRoom.get(roomCode);
   if (!clients || clients.size === 0) {
     return;
   }
+  const draw = options.draw === true;
   for (const client of clients) {
     const visibleState = getViewerMatchState(matchState, client.viewerIndex);
-    const payload = encodeEvent("game-state", JSON.stringify(visibleState));
+    const payload = encodeEvent("game-state", JSON.stringify({ ...visibleState, draw }));
     try {
       client.controller.enqueue(payload);
     } catch {
@@ -131,15 +136,24 @@ function statusMarkup(status: { hostConnected: boolean; guestConnected: boolean 
 }
 
 function clearDisconnectTimeout(room: Room, role?: ClientRole): void {
-  if (!room.disconnectTimeout) {
+  if (role) {
+    const timeout = room.disconnectTimeouts[role];
+    if (!timeout) {
+      return;
+    }
+    clearTimeout(timeout);
+    delete room.disconnectTimeouts[role];
     return;
   }
-  if (role && room.disconnectPendingRole && room.disconnectPendingRole !== role) {
-    return;
+  const hostTimeout = room.disconnectTimeouts.host;
+  if (hostTimeout) {
+    clearTimeout(hostTimeout);
   }
-  clearTimeout(room.disconnectTimeout);
-  room.disconnectTimeout = null;
-  room.disconnectPendingRole = null;
+  const guestTimeout = room.disconnectTimeouts.guest;
+  if (guestTimeout) {
+    clearTimeout(guestTimeout);
+  }
+  room.disconnectTimeouts = {};
 }
 
 function startDisconnectTimeout(
@@ -147,24 +161,34 @@ function startDisconnectTimeout(
   room: Room,
   disconnectedRole: ClientRole,
 ): void {
-  if (room.disconnectTimeout) {
+  if (room.disconnectTimeouts[disconnectedRole]) {
     return;
   }
   if (isMatchOver(room.matchState)) {
     return;
   }
-  room.disconnectPendingRole = disconnectedRole;
-  room.disconnectTimeout = setTimeout(() => {
+  room.disconnectTimeouts[disconnectedRole] = setTimeout(() => {
     const updatedRoom = getRoom(roomCode);
     if (!updatedRoom) {
       return;
     }
-    updatedRoom.disconnectTimeout = null;
-    updatedRoom.disconnectPendingRole = null;
+    delete updatedRoom.disconnectTimeouts[disconnectedRole];
     if (isMatchOver(updatedRoom.matchState)) {
       return;
     }
+    if (updatedRoom.draw) {
+      return;
+    }
     const { hostConnected, guestConnected } = updatedRoom;
+    if (!hostConnected && !guestConnected) {
+      updatedRoom.draw = true;
+      updatedRoom.forfeit = false;
+      updatedRoom.hostReady = false;
+      updatedRoom.guestReady = false;
+      console.log(`Match draw (dual disconnect): ${roomCode}`);
+      broadcastGameState(roomCode, updatedRoom.matchState, { draw: true });
+      return;
+    }
     if (hostConnected === guestConnected) {
       return;
     }
@@ -221,6 +245,19 @@ export function handleSse(request: Request, roomCode: string): Response {
 
   const role = resolveRole(request.url, room.hostToken);
   const viewerIndex: 0 | 1 = role === "host" ? room.hostPlayerIndex : room.hostPlayerIndex === 0 ? 1 : 0;
+  if (room.draw) {
+    const visibleState = getViewerMatchState(room.matchState, viewerIndex);
+    const payload = encodeEvent("game-state", JSON.stringify({ ...visibleState, draw: true }));
+    touchRoom(roomCode);
+    return new Response(payload, {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+        "x-accel-buffering": "no",
+      },
+    });
+  }
   let client: SseClient | null = null;
 
   const stream = new ReadableStream<Uint8Array>({

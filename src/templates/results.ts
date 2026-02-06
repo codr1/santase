@@ -8,6 +8,7 @@ type ResultsOptions = {
   matchState: MatchState;
   viewerIndex: 0 | 1;
   forfeit: boolean;
+  draw: boolean;
 };
 
 export function renderResultsPage({
@@ -15,6 +16,7 @@ export function renderResultsPage({
   matchState,
   viewerIndex,
   forfeit,
+  draw,
 }: ResultsOptions): string {
   const safeCode = escapeHtml(code);
   const opponentIndex = viewerIndex === 0 ? 1 : 0;
@@ -25,13 +27,17 @@ export function renderResultsPage({
     matchWinner = null;
   }
   const winnerText =
-    matchWinner === null
+    draw
+      ? "Match drawn"
+      : matchWinner === null
       ? "Match complete"
       : matchWinner === viewerIndex
         ? "You won!"
         : "You lost";
   const roundResult = matchState.game.roundResult;
-  const roundWinnerText = roundResult
+  const roundWinnerText = draw
+    ? "No winner"
+    : roundResult
     ? roundResult.winner === viewerIndex
       ? "You"
       : "Opponent"
@@ -40,13 +46,17 @@ export function renderResultsPage({
         ? "You"
         : "Opponent"
       : "Unknown";
-  const roundReason = roundResult
+  const roundReason = draw
+    ? "Both players disconnected"
+    : roundResult
     ? ROUND_RESULT_LABELS[roundResult.reason] ?? "Round complete"
     : forfeit
       ? "Forfeit"
       : "Round complete";
-  const gamePoints = roundResult ? roundResult.gamePoints : "-";
-  const winCondition = forfeit
+  const gamePoints = draw ? "0" : roundResult ? roundResult.gamePoints : "-";
+  const winCondition = draw
+    ? "Draw (both players disconnected)"
+    : forfeit
     ? matchWinner === viewerIndex
       ? "Victory by forfeit"
       : "Defeat by forfeit"
