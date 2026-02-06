@@ -52,3 +52,12 @@ export function renderUpdateStatusTextSource(statusElementName: string): string 
   ${statusElementName}.textContent = message;
 };`;
 }
+
+export function renderDisconnectSseSource(): string {
+  return `const disconnectSse = () => {
+  if (!sseRootEl || !window.htmx || typeof window.htmx.trigger !== "function") {
+    return;
+  }
+  window.htmx.trigger(sseRootEl, "htmx:beforeCleanupElement");
+};`;
+}

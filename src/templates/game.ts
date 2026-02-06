@@ -3,6 +3,7 @@ import { escapeHtml } from "../utils/html";
 import { getCardBackUrl, getCardImageUrl } from "./cards";
 import { ROUND_RESULT_LABELS } from "./shared-constants";
 import {
+  renderDisconnectSseSource,
   renderIsHostDetectionSource,
   renderParseStatusPayloadSource,
   renderUpdateStatusTextSource,
@@ -671,12 +672,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         return state.matchScores[0] >= 11 || state.matchScores[1] >= 11;
       };
 
-      const disconnectSse = () => {
-        if (!sseRootEl || !window.htmx || typeof window.htmx.trigger !== "function") {
-          return;
-        }
-        window.htmx.trigger(sseRootEl, "htmx:beforeCleanupElement");
-      };
+      ${renderDisconnectSseSource()}
 
       const cleanupBeforeRedirect = () => {
         if (roundEndCountdownId !== null) {

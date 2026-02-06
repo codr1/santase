@@ -1,6 +1,7 @@
 import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import {
+  renderDisconnectSseSource,
   renderIsHostDetectionSource,
   renderParseStatusPayloadSource,
   renderUpdateStatusTextSource,
@@ -58,12 +59,7 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
       const opponentLabel = "Opponent";
       let sseProcessingEnabled = true;
 
-      const disconnectSse = () => {
-        if (!sseRootEl || !window.htmx || typeof window.htmx.trigger !== "function") {
-          return;
-        }
-        window.htmx.trigger(sseRootEl, "htmx:beforeCleanupElement");
-      };
+      ${renderDisconnectSseSource()}
 
       const cleanupBeforeRedirect = () => {
         sseProcessingEnabled = false;
