@@ -26,6 +26,9 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | POST | `/rooms/:code/play` | Play a card (JSON body: `{card, marriageSuit?}`) |
 | POST | `/rooms/:code/exchange-trump` | Exchange trump 9 for the trump card |
 | POST | `/rooms/:code/close-deck` | Close the deck (leader only) |
+| POST | `/rooms/:code/ready` | Mark player as ready for next round |
+| POST | `/rooms/:code/next-round` | Force-start next round (countdown fallback) |
+| GET | `/rooms/:code/results` | Match results page |
 | GET | `/sse/:code` | SSE connection endpoint |
 | GET | `/public/*` | Static file serving (path-traversal protected) |
 
@@ -50,6 +53,11 @@ type Room = {
   hostConnected: boolean;
   guestConnected: boolean;
   guestEverJoined: boolean;
+  hostReady: boolean;
+  guestReady: boolean;
+  disconnectTimeout: ReturnType<typeof setTimeout> | null;
+  disconnectPendingRole: "host" | "guest" | null;
+  forfeit: boolean;
   lastActivity: number;
   createdAt: number;
   matchState: MatchState;
@@ -73,6 +81,9 @@ type RoomLookupResult =
 
 SSE endpoint returns specific message for `host-left`: "Room closed because the host left."
 
+**Functions**:
+- `forfeitMatch(room, winnerIndex)`: Sets the winner's match score to at least 11, marks `forfeit` as true, and resets ready flags; returns false if match is already over
+
 ## SSE
 
 Server-Sent Events for real-time communication.
@@ -80,6 +91,8 @@ Server-Sent Events for real-time communication.
 - **Endpoint**: `/sse/:code?hostToken=X` (token optional, identifies host)
 - **Heartbeat**: Every 25 seconds (comment ping)
 - **Cleanup**: Room deleted if host disconnects before guest ever joins
+- **Disconnect forfeit**: When a player disconnects after the game has started (guest has joined) and the match is not over, a 30-second timeout starts; if the disconnected player does not reconnect, the remaining player wins via `forfeitMatch`; reconnecting clears the timeout
+- **Status markup**: `<span>` includes `data-host-connected` and `data-guest-connected` attributes for client-side parsing
 
 ### Events
 
@@ -89,6 +102,7 @@ Server-Sent Events for real-time communication.
 | `status` | all | Lobby status HTML (`<span>` with connection state) |
 | `game-start` | all | Game URL path for redirect |
 | `game-state` | all | JSON-serialized `MatchState` for real-time updates |
+| `ready-state` | all | JSON `{hostReady, guestReady}` when a player marks ready |
 
 ## Play Endpoint
 
@@ -170,12 +184,69 @@ Same as play endpoint (hostToken query param or cookie).
 - Sets `isClosed` to true and `closedBy` to the closing player
 - Broadcasts `game-state` to all connected clients
 
+## Ready Endpoint
+
+`POST /rooms/:code/ready` marks a player as ready for the next round after a round ends.
+
+### Player Resolution
+
+Same as play endpoint (hostToken query param or cookie).
+
+### Responses
+
+| Status | Condition |
+|--------|-----------|
+| 200 | Player marked ready (or both ready, triggering new round) |
+| 409 | Round has not ended, match already ended |
+
+### Behavior
+
+- Validates round has ended and match is not over
+- Sets `hostReady` or `guestReady` based on the calling player
+- When both players are ready: starts a new round via `startNewRound`, resets ready flags, broadcasts `game-state`
+- When only one player ready: broadcasts `ready-state` with current ready flags
+
+## Next Round Endpoint
+
+`POST /rooms/:code/next-round` force-starts the next round after the countdown timer expires. Acts as a fallback when the ready-button flow is bypassed.
+
+### Responses
+
+| Status | Condition |
+|--------|-----------|
+| 200 | Next round started, or round already in progress (no-op) |
+| 409 | Match already ended |
+
+### Behavior
+
+- No player authentication required (any connected client can trigger)
+- If the current round has no result (already started), returns 200 with no changes
+- Otherwise starts a new round via `startNewRound`, resets ready flags, broadcasts `game-state`
+
+## Results Page
+
+`GET /rooms/:code/results` renders the match results page when the match is over.
+
+### Responses
+
+| Status | Condition |
+|--------|-----------|
+| 200 | Match over, renders results page |
+| 303 | Match not over, redirects to game page |
+| 404/410 | Room not found / expired |
+
+### Behavior
+
+- Displays match winner, final match scores, last round breakdown (winner, reason, scores, game points), and win condition
+- Shows "Victory by forfeit" / "Defeat by forfeit" when match ended via disconnect
+- Includes "Return to Lobby" link
+
 ## Templates
 
 HTML rendering with HTMX integration and Tailwind CSS styling.
 
 - **Layout**: Common HTML shell with HTMX + SSE extension scripts, Tailwind CSS (CDN), Inter font, GSAP animation library
-- **Pages**: Home, Join, Lobby, Game
+- **Pages**: Home, Join, Lobby, Game, Results
 - **XSS protection**: All dynamic content escaped via `escapeHtml()`
 - **Styles**: Shared button classes in `src/templates/styles.ts` (`buttonBaseClasses`)
 
@@ -205,6 +276,8 @@ Renders the interactive game board with viewer-specific perspective.
 - **Close deck button**: Shown when the player can close (is leader, no trick in progress, stock has 3+ cards, deck not already closed, trump card exists); sends POST to `/rooms/:code/close-deck`; visibility updated in real-time via client-side state checks
 - **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, won pile displays, trick area, won counters, round scores, and match scores without full page reload; uses GSAP animations for card additions/removals
 - **Click-to-play**: Player cards are clickable when it's the player's turn; clicking sends POST to `/rooms/:code/play`; automatically declares marriage when leading with K or Q of a declareable suit
+- **Round-end modal**: Shown when a round ends; displays round winner, reason, round/match scores, and game points earned; includes a 10-second countdown timer and a "Ready" button that sends POST to `/rooms/:code/ready`; when countdown expires, sends POST to `/rooms/:code/next-round`; shows opponent ready state via `ready-state` SSE events; pauses countdown when opponent disconnects; redirects to `/rooms/:code/results` when match is over
+- **Disconnect handling**: Monitors `status` SSE events for opponent connection state; pauses round-end countdown when opponent disconnects; shows "Opponent disconnected" status text; resumes countdown on reconnect
 
 ## Game
 
@@ -296,7 +369,7 @@ type MatchState = {
 
 **Functions**:
 - `startMatch()`: Creates a new match with shuffled deck, random dealer, and initial game state
-- `startNewRound(matchState, roundWinnerIndex)`: Applies round result to match scores, rotates dealer to loser, sets leader to winner, and deals fresh hands; throws if round hasn't ended or winner doesn't match result
+- `startNewRound(matchState, roundWinnerIndex)`: Preserves current match scores, rotates dealer to loser, sets leader to winner, and deals fresh hands; throws if round hasn't ended or winner doesn't match result. Match scores are applied at play time (in the play endpoint), not during round transition
 - `initializeMatch()`: Alias for `startMatch()`
 - `applyRoundResult(matchState, winnerIndex, points)`: Returns new MatchState with winner's score incremented
 - `isMatchOver(matchState)`: Returns true when either player has ≥11 points
