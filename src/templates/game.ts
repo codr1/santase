@@ -552,6 +552,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         return state.matchScores[0] >= 11 || state.matchScores[1] >= 11;
       };
 
+      const redirectToResults = () => {
+        window.location.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
+      };
+
       const getMatchWinnerIndex = (state) => {
         if (!state?.matchScores) {
           return null;
@@ -742,6 +746,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
 
       const showRoundEndModal = (state) => {
+        if (isMatchOver(state)) {
+          redirectToResults();
+          return;
+        }
         if (!roundEndModal) {
           return;
         }
@@ -1886,6 +1894,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (roundEndModal) {
           const hasRoundResult = Boolean(parsedState.game.roundResult);
           const isHidden = roundEndModal.hasAttribute("hidden");
+          if (hasRoundResult && isMatchOver(parsedState)) {
+            redirectToResults();
+            return;
+          }
           if (hasRoundResult) {
             if (isHidden) {
               showRoundEndModal(parsedState);

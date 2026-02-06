@@ -87,6 +87,9 @@ const postNextRound = async (roomCode: string, asHost: boolean) => {
   );
 };
 
+const getResults = async (roomCode: string) =>
+  handleRequest(new Request(`http://example/rooms/${roomCode}/results`));
+
 describe("resolvePort", () => {
   test("defaults to 3000 when env var is missing", () => {
     expect(resolvePort(undefined)).toBe(3000);
@@ -672,5 +675,63 @@ describe("next round endpoint", () => {
     } finally {
       deleteRoom(room.code);
     }
+  });
+});
+
+describe("results endpoint", () => {
+  test("renders the results page when the match is over", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [11, 5];
+
+    try {
+      const response = await getResults(room.code);
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain("Match Results");
+      expect(body).toContain("Return to Lobby");
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("redirects to the game when the match is not over", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [5, 5];
+
+    try {
+      const response = await getResults(room.code);
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe(
+        `/rooms/${encodeURIComponent(room.code)}/game`,
+      );
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("shows the join page for expired rooms", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
+    });
+    const room = createTestRoom(game, 0);
+    deleteRoom(room.code, "expired");
+
+    const response = await getResults(room.code);
+    expect(response.status).toBe(410);
+    const body = await response.text();
+    expect(body).toContain("Room expired. Start a new room.");
+  });
+
+  test("shows the join page for missing rooms", async () => {
+    const response = await getResults("NOPE");
+    expect(response.status).toBe(404);
+    const body = await response.text();
+    expect(body).toContain("Room not found. Double-check the code.");
   });
 });

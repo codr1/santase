@@ -4,6 +4,7 @@ import { renderHomePage } from "./templates/home";
 import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
 import { renderGamePage } from "./templates/game";
+import { renderResultsPage } from "./templates/results";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
 import { broadcastGameState, broadcastReadyState, handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
@@ -570,6 +571,33 @@ export async function handleRequest(request: Request): Promise<Response> {
           matchState: resolution.room.matchState,
           viewerIndex,
           hostToken: viewerIndex === resolution.room.hostPlayerIndex ? resolution.room.hostToken : undefined,
+        }),
+      );
+    }
+
+    const resultsMatch = path.match(/^\/rooms\/([^/]+)\/results$/);
+    if (resultsMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(resultsMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return htmlResponse(
+          renderJoinPage({ error: resolution.error, code: normalizedCode }),
+          resolution.status,
+        );
+      }
+      touchRoom(normalizedCode);
+      if (!isMatchOver(resolution.room.matchState)) {
+        return Response.redirect(
+          `/rooms/${encodeURIComponent(resolution.room.code)}/game`,
+          303,
+        );
+      }
+      const viewerIndex = resolveViewerIndex(request, resolution.room);
+      return htmlResponse(
+        renderResultsPage({
+          code: resolution.room.code,
+          matchState: resolution.room.matchState,
+          viewerIndex,
         }),
       );
     }
