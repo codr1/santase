@@ -1052,4 +1052,23 @@ describe("game endpoint", () => {
       deleteRoom(room.code);
     }
   });
+
+  test("renders game page with initial match-over flag when match is complete", async () => {
+    const room = createTestRoom(
+      buildGameState({
+        roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+      }),
+      0,
+    );
+    room.matchState.matchScores = [11, 4];
+
+    try {
+      const response = await getGame(room.code);
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain("const initialMatchOver = true;");
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
 });

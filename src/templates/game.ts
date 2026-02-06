@@ -23,6 +23,7 @@ type GameOptions = {
   matchState: MatchState;
   viewerIndex: 0 | 1;
   hostToken?: string;
+  initialMatchOver?: boolean;
 };
 
 const SUIT_SYMBOLS: Record<Suit, { symbolHtml: string; label: string; colorClass: string }> = {
@@ -159,7 +160,13 @@ function countCards(cards: Card[] | { count: number }): number {
   return Array.isArray(cards) ? cards.length : cards.count;
 }
 
-export function renderGamePage({ code, matchState, viewerIndex, hostToken }: GameOptions): string {
+export function renderGamePage({
+  code,
+  matchState,
+  viewerIndex,
+  hostToken,
+  initialMatchOver = false,
+}: GameOptions): string {
   const safeCode = escapeHtml(code);
   const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
   const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
@@ -574,6 +581,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentIndex = ${opponentIndex};
       const roomCode = ${JSON.stringify(code)};
       const initialState = ${JSON.stringify(viewerState)};
+      const initialMatchOver = ${initialMatchOver ? "true" : "false"};
       const defaultDeclare66GracePeriodMs = ${DECLARE_66_GRACE_PERIOD_MS};
       const declare66GracePeriodMs = Number.isFinite(initialState?.declare66GracePeriodMs)
         ? Math.max(0, Number(initialState.declare66GracePeriodMs))
@@ -603,6 +611,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       // ~10% of card height (h-24/h-28) to keep waiting cards lifted subtly.
       const waitingOffsetPx = 11;
       const trickResolutionDelayMs = 1000;
+      const matchOverOverlayDelayMs = 1000;
       const trickResolutionDuration = 0.6;
       const roundEndCountdownStart = 10;
       let animationsSettled = true;
@@ -615,8 +624,6 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let roundEndCountdownId = null;
       let roundEndCountdownValue = roundEndCountdownStart;
       let roundEndCountdownPaused = false;
-      const matchCompleteRedirectDelayMs = 3000;
-      let matchCompleteRedirectTimeoutId = null;
       let opponentConnected = true;
       const opponentLabel = "Opponent";
       let declareRequestPending = false;
@@ -624,6 +631,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let latestReadyState = null;
       let graceCountdownIntervalId = null;
       let graceCountdownDeadlineMs = null;
+      let matchOverOverlayTimeoutId = null;
 
       const roundResultLabels = ${JSON.stringify(ROUND_RESULT_LABELS)};
 
@@ -764,9 +772,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           window.clearInterval(roundEndCountdownId);
           roundEndCountdownId = null;
         }
-        if (matchCompleteRedirectTimeoutId !== null) {
-          window.clearTimeout(matchCompleteRedirectTimeoutId);
-          matchCompleteRedirectTimeoutId = null;
+        if (matchOverOverlayTimeoutId !== null) {
+          window.clearTimeout(matchOverOverlayTimeoutId);
+          matchOverOverlayTimeoutId = null;
         }
         sseProcessingEnabled = false;
         disconnectSse();
@@ -863,6 +871,28 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           viewFullResultsLink.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
         }
         matchOverOverlay.removeAttribute("hidden");
+      };
+
+      const showMatchOverOverlayAfterDelay = (
+        state,
+        viewer,
+        delayMs = matchOverOverlayDelayMs,
+      ) => {
+        if (matchOverOverlayTimeoutId !== null) {
+          window.clearTimeout(matchOverOverlayTimeoutId);
+          matchOverOverlayTimeoutId = null;
+        }
+        const safeDelayMs = Number.isFinite(delayMs)
+          ? Math.max(0, Number(delayMs))
+          : matchOverOverlayDelayMs;
+        if (safeDelayMs <= 0) {
+          showMatchOverOverlay(state, viewer);
+          return;
+        }
+        matchOverOverlayTimeoutId = window.setTimeout(() => {
+          matchOverOverlayTimeoutId = null;
+          showMatchOverOverlay(state, viewer);
+        }, safeDelayMs);
       };
 
       const updateRoundEndModal = (state) => {
@@ -1044,9 +1074,6 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             opponentReadyEl.hidden = true;
           }
           stopRoundEndCountdown();
-        } else if (matchCompleteRedirectTimeoutId !== null) {
-          window.clearTimeout(matchCompleteRedirectTimeoutId);
-          matchCompleteRedirectTimeoutId = null;
         }
       };
 
@@ -1055,19 +1082,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!roundEndModal) {
           return;
         }
-        if (matchCompleteRedirectTimeoutId !== null) {
-          window.clearTimeout(matchCompleteRedirectTimeoutId);
-          matchCompleteRedirectTimeoutId = null;
-        }
         resetRoundEndModal();
         updateRoundEndModal(state);
         applyMatchCompleteState(state);
         roundEndModal.removeAttribute("hidden");
         if (isMatchOver(state)) {
-          matchCompleteRedirectTimeoutId = window.setTimeout(() => {
-            matchCompleteRedirectTimeoutId = null;
-            redirectToResults();
-          }, matchCompleteRedirectDelayMs);
+          showMatchOverOverlayAfterDelay(state, viewerIndex);
         } else {
           if (opponentConnected) {
             startRoundEndCountdown();
@@ -1088,10 +1108,6 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         roundEndModal.setAttribute("hidden", "");
         stopGraceCountdown();
         stopRoundEndCountdown();
-        if (matchCompleteRedirectTimeoutId !== null) {
-          window.clearTimeout(matchCompleteRedirectTimeoutId);
-          matchCompleteRedirectTimeoutId = null;
-        }
         resetRoundEndModal(true);
         if (matchCompleteEl) {
           matchCompleteEl.hidden = true;
@@ -2132,7 +2148,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         updateExchangeTrumpButton(currentState);
         updateCloseDeckButton(currentState);
         updateDeclare66Button(currentState);
-        if (currentState?.game?.roundResult) {
+        if (initialMatchOver) {
+          showMatchOverOverlay(currentState, viewerIndex);
+        } else if (currentState?.game?.roundResult) {
           showRoundEndModal(currentState);
         }
         if (!window.gsap) {
@@ -2231,7 +2249,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
 
         if (isMatchOver(parsedState) && !parsedState.game.roundResult) {
-          redirectToResults();
+          currentState = parsedState;
+          if (parsedState.draw === true) {
+            redirectToResults();
+            return;
+          }
+          showMatchOverOverlay(parsedState, viewerIndex);
           return;
         }
 
@@ -2314,18 +2337,22 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (roundEndModal) {
           const hasRoundResult = Boolean(parsedState.game.roundResult);
           const isHidden = roundEndModal.hasAttribute("hidden");
+          if (hasRoundResult && isMatchOver(parsedState)) {
+            if (isHidden) {
+              showRoundEndModal(parsedState);
+            } else {
+              updateRoundEndModal(parsedState);
+              applyMatchCompleteState(parsedState);
+              showMatchOverOverlayAfterDelay(parsedState, viewerIndex);
+            }
+            return;
+          }
           if (hasRoundResult) {
             if (isHidden) {
               showRoundEndModal(parsedState);
             } else {
               updateRoundEndModal(parsedState);
               applyMatchCompleteState(parsedState);
-              if (isMatchOver(parsedState) && matchCompleteRedirectTimeoutId === null) {
-                matchCompleteRedirectTimeoutId = window.setTimeout(() => {
-                  matchCompleteRedirectTimeoutId = null;
-                  redirectToResults();
-                }, matchCompleteRedirectDelayMs);
-              }
             }
           } else if (!hasRoundResult && !isHidden) {
             hideRoundEndModal();

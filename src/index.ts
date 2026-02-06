@@ -601,6 +601,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           code: resolution.room.code,
           matchState: resolution.room.matchState,
           viewerIndex,
+          initialMatchOver: isMatchOver(resolution.room.matchState) && !resolution.room.draw,
           hostToken: viewerIndex === resolution.room.hostPlayerIndex ? resolution.room.hostToken : undefined,
         }),
       );
