@@ -14,6 +14,7 @@ import {
   canDeclareMarriage,
   canCloseDeck,
   canExchangeTrump9,
+  DECLARE_66_GRACE_PERIOD_MS,
   closeDeck,
   declare66,
   declareMarriage,
@@ -27,7 +28,6 @@ import {
 } from "./game";
 
 const DEFAULT_PORT = 3000;
-const DECLARE_66_GRACE_PERIOD_MS = 2600;
 const PUBLIC_ROOT = normalize(decodeURIComponent(new URL("../public", import.meta.url).pathname));
 
 export function resolvePort(envPort: string | undefined): number {

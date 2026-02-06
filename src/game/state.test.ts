@@ -5,6 +5,7 @@ import {
   TRUMP_MARRIAGE_POINTS,
   createDeck,
 } from "./cards";
+import { DECLARE_66_GRACE_PERIOD_MS } from "./config";
 import {
   canDeclareMarriage,
   canDeclare66,
@@ -152,6 +153,7 @@ describe("getViewerMatchState", () => {
     expect(Array.isArray(viewerState.game.playerHands[1])).toBe(false);
     expect(Array.isArray(viewerState.game.stock)).toBe(false);
     expect(Number.isNaN(viewerState.game.roundScores[1])).toBe(true);
+    expect(viewerState.declare66GracePeriodMs).toBe(DECLARE_66_GRACE_PERIOD_MS);
   });
 
   test("keeps player 1 hand visible and hides player 0 hand for viewer 1", () => {
@@ -167,6 +169,7 @@ describe("getViewerMatchState", () => {
     expect(Array.isArray(viewerState.game.playerHands[0])).toBe(false);
     expect(Array.isArray(viewerState.game.stock)).toBe(false);
     expect(Number.isNaN(viewerState.game.roundScores[0])).toBe(true);
+    expect(viewerState.declare66GracePeriodMs).toBe(DECLARE_66_GRACE_PERIOD_MS);
   });
 });
 

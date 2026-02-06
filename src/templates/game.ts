@@ -332,6 +332,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               <p class="mt-3 text-center text-xs text-emerald-200/70" data-trick-status="true">
                 ${trickStatusText}
               </p>
+              <p class="mt-2 text-center text-xs font-semibold text-amber-200" data-grace-countdown="true" hidden>
+                Leader can play in 0.0s
+              </p>
             </div>
 
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
@@ -492,6 +495,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentIndex = ${opponentIndex};
       const roomCode = ${JSON.stringify(code)};
       const initialState = ${JSON.stringify(viewerState)};
+      const defaultDeclare66GracePeriodMs = 2600;
+      const declare66GracePeriodMs = Number.isFinite(initialState?.declare66GracePeriodMs)
+        ? Math.max(0, Number(initialState.declare66GracePeriodMs))
+        : defaultDeclare66GracePeriodMs;
       const isHost = ${hostToken ? "true" : "false"};
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
@@ -534,6 +541,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let declareRequestPending = false;
       let pendingTrickResolutionKey = null;
       let latestReadyState = null;
+      let graceCountdownIntervalId = null;
+      let graceCountdownDeadlineMs = null;
 
       const roundResultLabels = {
         declared_66: "Declared 66",
@@ -564,6 +573,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
       const matchCompleteEl = document.querySelector("[data-match-complete]");
       const actionNoticeEl = document.querySelector("[data-action-notice]");
+      const graceCountdownEl = document.querySelector("[data-grace-countdown]");
       const actionNoticeAutoDismissMs = 4000;
       let actionNoticeTimeoutId = null;
 
@@ -588,6 +598,45 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           hideActionNotice();
           actionNoticeTimeoutId = null;
         }, actionNoticeAutoDismissMs);
+      };
+
+      const stopGraceCountdown = () => {
+        if (graceCountdownIntervalId !== null) {
+          window.clearInterval(graceCountdownIntervalId);
+          graceCountdownIntervalId = null;
+        }
+        graceCountdownDeadlineMs = null;
+        if (!graceCountdownEl) {
+          return;
+        }
+        graceCountdownEl.hidden = true;
+      };
+
+      const updateGraceCountdown = () => {
+        if (!graceCountdownEl || graceCountdownDeadlineMs === null) {
+          return;
+        }
+        const remainingMs = Math.max(0, graceCountdownDeadlineMs - Date.now());
+        const remainingSeconds = (remainingMs / 1000).toFixed(1);
+        graceCountdownEl.textContent = "Leader can play in " + remainingSeconds + "s";
+        graceCountdownEl.hidden = false;
+        if (remainingMs <= 0) {
+          stopGraceCountdown();
+        }
+      };
+
+      const startGraceCountdown = (durationMs) => {
+        const safeDurationMs = Number.isFinite(durationMs)
+          ? Math.max(0, Number(durationMs))
+          : declare66GracePeriodMs;
+        if (safeDurationMs <= 0) {
+          stopGraceCountdown();
+          return;
+        }
+        stopGraceCountdown();
+        graceCountdownDeadlineMs = Date.now() + safeDurationMs;
+        updateGraceCountdown();
+        graceCountdownIntervalId = window.setInterval(updateGraceCountdown, 100);
       };
 
       const resetRoundEndModal = (clearReadyState = false) => {
@@ -856,6 +905,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
 
       const showRoundEndModal = (state) => {
+        stopGraceCountdown();
         if (isMatchOver(state)) {
           redirectToResults();
           return;
@@ -885,6 +935,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return;
         }
         roundEndModal.setAttribute("hidden", "");
+        stopGraceCountdown();
         stopRoundEndCountdown();
         resetRoundEndModal(true);
         if (matchCompleteEl) {
@@ -2017,6 +2068,14 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
         const nextGame = parsedState.game;
         const currentGame = currentState?.game;
+        const trickJustCompleted = Boolean(currentGame?.currentTrick) &&
+          !nextGame.currentTrick &&
+          currentGame.leader !== nextGame.leader;
+        if (nextGame.currentTrick || nextGame.roundResult) {
+          stopGraceCountdown();
+        } else if (trickJustCompleted) {
+          startGraceCountdown(parsedState.declare66GracePeriodMs);
+        }
 
         if (
           !currentGame ||

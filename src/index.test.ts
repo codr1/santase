@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleRequest, resolvePort } from "./index";
 import { createRoom, deleteRoom } from "./rooms";
-import type { Card, GameState } from "./game";
+import { DECLARE_66_GRACE_PERIOD_MS, type Card, type GameState } from "./game";
 
 const HOST_TOKEN = "host-token";
 const decoder = new TextDecoder();
@@ -892,6 +892,7 @@ describe("SSE payloads", () => {
       expect(payload.game.stock).toEqual({ count: game.stock.length });
       expect(payload.game.roundScores[0]).toBe(game.roundScores[0]);
       expect(payload.game.roundScores[1]).toBeNull();
+      expect(payload.declare66GracePeriodMs).toBe(DECLARE_66_GRACE_PERIOD_MS);
       expect(Array.isArray(payload.game.playerHands[1])).toBe(false);
       expect(Array.isArray(payload.game.stock)).toBe(false);
     } finally {
