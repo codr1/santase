@@ -1,7 +1,7 @@
 import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import { getCardBackUrl, getCardImageUrl } from "./cards";
-import { canExchangeTrump9 } from "../game";
+import { canCloseDeck as canCloseDeckCheck, canExchangeTrump9 } from "../game";
 import type { Card, Suit } from "../game/cards";
 import type { MatchState } from "../game/state";
 
@@ -182,6 +182,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const stockCount = stock.length;
   const stockPileMarkup = renderStockPile(stockCount);
   const canExchangeTrump = canExchangeTrump9(matchState.game, playerIndex);
+  const canCloseDeck = canCloseDeckCheck(matchState.game, playerIndex);
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -340,6 +341,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   Exchange trump 9
                 </button>
               </div>
+              <div class="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+                  data-close-deck="true"
+                  ${canCloseDeck ? "" : "hidden"}
+                >
+                  Close deck
+                </button>
+              </div>
             </div>
           </div>
 
@@ -413,6 +424,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let activeAnimations = 0;
       let playRequestPending = false;
       let exchangeRequestPending = false;
+      let closeRequestPending = false;
       let pendingTrickResolutionKey = null;
 
       const trackAnimations = (count) => {
@@ -626,6 +638,28 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const hand = game.playerHands?.[playerIndex] ?? [];
         return hand.some((card) => card.rank === "9" && card.suit === game.trumpSuit);
       };
+      const canCloseDeckState = (state, playerIndex) => {
+        const game = state?.game;
+        if (!game) {
+          return false;
+        }
+        if (game.roundResult) {
+          return false;
+        }
+        if (game.currentTrick) {
+          return false;
+        }
+        if (game.leader !== playerIndex) {
+          return false;
+        }
+        if (!Array.isArray(game.stock) || game.stock.length < 3) {
+          return false;
+        }
+        if (game.isClosed) {
+          return false;
+        }
+        return game.trumpCard !== null;
+      };
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
       const areOptionalCardsEqual = (left, right) => {
@@ -708,6 +742,15 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const canExchange = canExchangeTrump9State(state, viewerIndex);
         button.hidden = !canExchange;
         button.disabled = !canExchange || exchangeRequestPending;
+      };
+      const updateCloseDeckButton = (state) => {
+        const button = document.querySelector("[data-close-deck]");
+        if (!button) {
+          return;
+        }
+        const canClose = canCloseDeckState(state, viewerIndex);
+        button.hidden = !canClose;
+        button.disabled = !canClose || closeRequestPending;
       };
       const animateNewCards = (cards, isWaiting) => {
         if (!window.gsap || cards.length === 0) {
@@ -1244,10 +1287,43 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             } finally {
               exchangeRequestPending = false;
               updateExchangeTrumpButton(currentState);
+              updateCloseDeckButton(currentState);
+            }
+          });
+        }
+        const closeButton = document.querySelector("[data-close-deck]");
+        if (closeButton) {
+          closeButton.addEventListener("click", async () => {
+            if (closeRequestPending) {
+              return;
+            }
+            if (!canCloseDeckState(currentState, viewerIndex)) {
+              return;
+            }
+            closeRequestPending = true;
+            updateCloseDeckButton(currentState);
+            try {
+              const response = await fetch(
+                "/rooms/" + encodeURIComponent(roomCode) + "/close-deck",
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                },
+              );
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                console.warn("Close deck rejected", response.status, errorText);
+              }
+            } catch (error) {
+              console.warn("Failed to close deck", error);
+            } finally {
+              closeRequestPending = false;
+              updateCloseDeckButton(currentState);
             }
           });
         }
         updateExchangeTrumpButton(currentState);
+        updateCloseDeckButton(currentState);
         if (!window.gsap) {
           return;
         }
@@ -1356,6 +1432,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
 
         updateExchangeTrumpButton(parsedState);
+        updateCloseDeckButton(parsedState);
 
         currentState = parsedState;
       });
