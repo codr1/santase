@@ -33,7 +33,9 @@ Santase Rules
 Santase is not a commonly played card game but it is a lot of fun. This two-player game, popular in Eastern Europe, is challenging and competitive. Give it a try.
 
 
-Decide who leads by gentleman's agreement or any means you like. This player will lay down a card. The opponent will do then do the same. 
+<!-- BEGIN WIP: STORY-0035 -->
+Decide who leads by gentleman's agreement or any means you like. This player will lay down a card. The opponent will do then do the same.
+<!-- END WIP -->
 
 
 
@@ -57,17 +59,29 @@ Goal
 Dealing
 
 
+<!-- BEGIN WIP: STORY-0035 -->
 Playing
+<!-- END WIP -->
 
 
+<!-- BEGIN WIP: STORY-0035 -->
 Kings and Queens
+<!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0035 -->
 Exchanging the 9
+<!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0035 -->
 The Run-off
+<!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0035 -->
 Card Scoring
+<!-- END WIP -->
 
 
+<!-- BEGIN WIP: STORY-0035 -->
 Game Scoring
+<!-- END WIP -->
 
