@@ -1976,6 +1976,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return;
         }
         latestReadyState = parsedState;
+        const viewerReady = isHost ? parsedState?.hostReady : parsedState?.guestReady;
+        if (viewerReady) {
+          readyRequestPending = false;
+        }
         syncOpponentReady(parsedState);
         updateReadyButtonState(parsedState);
       });

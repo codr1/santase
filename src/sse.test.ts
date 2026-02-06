@@ -145,7 +145,7 @@ describe("SSE status broadcasting", () => {
     const initialEvents = await readEvents(hostReader, 1);
     const initialStatus = initialEvents.find((event) => event.event === "status");
     expect(initialStatus?.data).toBe(
-      '<span data-host-connected="true" data-guest-connected="false">Waiting for opponent...</span>',
+      '<span data-host-connected="true" data-guest-connected="false"></span>',
     );
 
     const guestAbort = new AbortController();
@@ -166,14 +166,14 @@ describe("SSE status broadcasting", () => {
       JSON.stringify({ ...getViewerMatchState(room.matchState, room.hostPlayerIndex), draw: false }),
     );
     expect(statusAfterGuest?.data).toBe(
-      '<span data-host-connected="true" data-guest-connected="true">Opponent connected</span>',
+      '<span data-host-connected="true" data-guest-connected="true"></span>',
     );
 
     guestAbort.abort();
     const guestDisconnectEvents = await readEvents(hostReader, 1);
     const statusAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "status");
     expect(statusAfterGuestLeft?.data).toBe(
-      '<span data-host-connected="true" data-guest-connected="false">Waiting for opponent...</span>',
+      '<span data-host-connected="true" data-guest-connected="false"></span>',
     );
 
     hostAbort.abort();

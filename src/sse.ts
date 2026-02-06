@@ -131,8 +131,7 @@ function updateRoomConnections(roomCode: string): { hostConnected: boolean; gues
 }
 
 function statusMarkup(status: { hostConnected: boolean; guestConnected: boolean }): string {
-  const message = status.guestConnected ? "Opponent connected" : "Waiting for opponent...";
-  return `<span data-host-connected="${status.hostConnected}" data-guest-connected="${status.guestConnected}">${message}</span>`;
+  return `<span data-host-connected="${status.hostConnected}" data-guest-connected="${status.guestConnected}"></span>`;
 }
 
 function clearDisconnectTimeout(room: Room, role?: ClientRole): void {
