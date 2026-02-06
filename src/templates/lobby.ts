@@ -47,6 +47,8 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
     </main>
     <script>
       const gameStartListener = document.getElementById("game-start-listener");
+      const lobbyStatusEl = document.getElementById("lobby-status");
+      const isHost = ${isHost ? "true" : "false"};
       if (gameStartListener) {
         console.log("[lobby] game-start listener attached");
         gameStartListener.addEventListener("htmx:afterSettle", (event) => {
@@ -56,6 +58,59 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
           window.location.assign(destination);
         });
       }
+      // Keep in sync with parseStatusPayload in src/templates/game.ts.
+      const parseStatusPayload = (payload) => {
+        if (!payload) {
+          return null;
+        }
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed && typeof parsed === "object") {
+            return {
+              hostConnected: Boolean(parsed.hostConnected),
+              guestConnected: Boolean(parsed.guestConnected),
+            };
+          }
+        } catch {
+          // Not JSON, fall through to HTML parsing.
+        }
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(payload, "text/html");
+          const span = doc.body.firstElementChild;
+          if (!span) {
+            return null;
+          }
+          const hostAttr = span.getAttribute("data-host-connected");
+          const guestAttr = span.getAttribute("data-guest-connected");
+          if (hostAttr === null || guestAttr === null) {
+            return null;
+          }
+          return {
+            hostConnected: hostAttr === "true",
+            guestConnected: guestAttr === "true",
+          };
+        } catch {
+          return null;
+        }
+      };
+      const updateStatusText = (hostConnected, guestConnected) => {
+        if (!lobbyStatusEl) {
+          return;
+        }
+        const opponentIsConnected = isHost ? guestConnected : hostConnected;
+        lobbyStatusEl.textContent = opponentIsConnected
+          ? "Opponent connected"
+          : "Waiting for opponent...";
+      };
+      document.body.addEventListener("htmx:sseMessage", (event) => {
+        const detail = event.detail || {};
+        if (detail.type !== "status") return;
+        const parsed = parseStatusPayload(detail.data || "");
+        if (parsed) {
+          updateStatusText(parsed.hostConnected, parsed.guestConnected);
+        }
+      });
     </script>
   `;
 

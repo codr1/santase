@@ -6,6 +6,7 @@ type ResultsOptions = {
   code: string;
   matchState: MatchState;
   viewerIndex: 0 | 1;
+  forfeit: boolean;
 };
 
 const ROUND_RESULT_LABELS: Record<string, string> = {
@@ -15,7 +16,12 @@ const ROUND_RESULT_LABELS: Record<string, string> = {
   closed_failed: "Failed to close",
 };
 
-export function renderResultsPage({ code, matchState, viewerIndex }: ResultsOptions): string {
+export function renderResultsPage({
+  code,
+  matchState,
+  viewerIndex,
+  forfeit,
+}: ResultsOptions): string {
   const safeCode = escapeHtml(code);
   const opponentIndex = viewerIndex === 0 ? 1 : 0;
   let matchWinner: 0 | 1 | null = null;
@@ -35,16 +41,26 @@ export function renderResultsPage({ code, matchState, viewerIndex }: ResultsOpti
     ? roundResult.winner === viewerIndex
       ? "You"
       : "Opponent"
-    : "Unknown";
+    : forfeit && matchWinner !== null
+      ? matchWinner === viewerIndex
+        ? "You"
+        : "Opponent"
+      : "Unknown";
   const roundReason = roundResult
     ? ROUND_RESULT_LABELS[roundResult.reason] ?? "Round complete"
-    : "Round complete";
-  const gamePoints = roundResult ? roundResult.gamePoints : "-";
-  const winCondition = roundResult
-    ? roundResult.reason === "false_declaration" || roundResult.reason === "closed_failed"
+    : forfeit
       ? "Forfeit"
-      : "Normal victory"
-    : "Match complete";
+      : "Round complete";
+  const gamePoints = roundResult ? roundResult.gamePoints : "-";
+  const winCondition = forfeit
+    ? matchWinner === viewerIndex
+      ? "Victory by forfeit"
+      : "Defeat by forfeit"
+    : roundResult
+      ? roundResult.reason === "false_declaration" || roundResult.reason === "closed_failed"
+        ? "Forfeit"
+        : "Normal victory"
+      : "Match complete";
 
   const body = `
     <main class="min-h-screen bg-emerald-950 px-4 py-8 text-emerald-50 sm:px-8">

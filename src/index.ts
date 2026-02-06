@@ -598,6 +598,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           code: resolution.room.code,
           matchState: resolution.room.matchState,
           viewerIndex,
+          forfeit: resolution.room.forfeit,
         }),
       );
     }

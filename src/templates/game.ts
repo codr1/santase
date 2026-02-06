@@ -497,6 +497,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let roundEndCountdownValue = roundEndCountdownStart;
       let roundEndCountdownPaused = false;
       let opponentConnected = true;
+      const opponentLabel = "Opponent";
       let pendingTrickResolutionKey = null;
       let latestReadyState = null;
 
@@ -523,6 +524,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const matchScoreOpponentEl = document.querySelector("[data-match-score-opponent]");
       const gamePointsEl = document.querySelector("[data-game-points]");
       const countdownEl = document.querySelector("[data-countdown]");
+      const gameStatusEl = document.querySelector("#game-status");
       const readyButton = document.querySelector("[data-ready-btn]");
       const opponentReadyEl = document.querySelector("[data-opponent-ready]");
       const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
@@ -639,7 +641,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         stopRoundEndCountdown();
         roundEndCountdownPaused = true;
-        setText(countdownEl, "Waiting for opponent...");
+        setText(countdownEl, "Waiting for " + opponentLabel + " to reconnect...");
         if (opponentReadyEl) {
           opponentReadyEl.hidden = true;
         }
@@ -727,6 +729,54 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (roundEndCountdownPaused) {
           startRoundEndCountdownFromValue(true);
         }
+      };
+
+      // Keep in sync with parseStatusPayload in src/templates/lobby.ts.
+      const parseStatusPayload = (payload) => {
+        if (!payload) {
+          return null;
+        }
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed && typeof parsed === "object") {
+            return {
+              hostConnected: Boolean(parsed.hostConnected),
+              guestConnected: Boolean(parsed.guestConnected),
+            };
+          }
+        } catch {
+          // Not JSON, fall through to HTML parsing.
+        }
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(payload, "text/html");
+          const span = doc.body.firstElementChild;
+          if (!span) {
+            return null;
+          }
+          const hostAttr = span.getAttribute("data-host-connected");
+          const guestAttr = span.getAttribute("data-guest-connected");
+          if (hostAttr === null || guestAttr === null) {
+            return null;
+          }
+          return {
+            hostConnected: hostAttr === "true",
+            guestConnected: guestAttr === "true",
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      const updateStatusText = (hostConnected, guestConnected) => {
+        if (!gameStatusEl) {
+          return;
+        }
+        const opponentIsConnected = isHost ? guestConnected : hostConnected;
+        const message = opponentIsConnected
+          ? opponentLabel + " connected"
+          : "Waiting for " + opponentLabel.toLowerCase() + "...";
+        gameStatusEl.textContent = message;
       };
 
       const applyMatchCompleteState = (state) => {
@@ -1769,28 +1819,26 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const detail = event.detail || {};
         if (detail.type !== "status") return;
         const payload = detail.data || "";
-        let nextOpponentConnected = opponentConnected;
-        if (payload) {
-          try {
-            const parsed = JSON.parse(payload);
-            if (parsed && typeof parsed === "object") {
-              const hostConnected = Boolean(parsed.hostConnected);
-              const guestConnected = Boolean(parsed.guestConnected);
-              nextOpponentConnected = isHost ? guestConnected : hostConnected;
-            }
-          } catch {
-            if (/waiting for opponent/i.test(payload)) {
-              nextOpponentConnected = false;
-            } else if (/opponent connected/i.test(payload)) {
-              nextOpponentConnected = true;
-            }
+        const parsed = parseStatusPayload(payload);
+        if (parsed) {
+          updateStatusText(parsed.hostConnected, parsed.guestConnected);
+          const nextOpponentConnected = isHost ? parsed.guestConnected : parsed.hostConnected;
+          if (nextOpponentConnected === opponentConnected) {
+            return;
           }
-        }
-        if (nextOpponentConnected === opponentConnected) {
+          opponentConnected = nextOpponentConnected;
+          updateCountdownForConnection();
           return;
         }
-        opponentConnected = nextOpponentConnected;
-        updateCountdownForConnection();
+        if (/waiting for opponent/i.test(payload)) {
+          opponentConnected = false;
+          updateCountdownForConnection();
+          return;
+        }
+        if (/opponent connected/i.test(payload)) {
+          opponentConnected = true;
+          updateCountdownForConnection();
+        }
       });
 
       document.body.addEventListener("htmx:sseMessage", (event) => {
@@ -1806,6 +1854,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
 
         if (!parsedState || !parsedState.game) {
+          return;
+        }
+
+        if (isMatchOver(parsedState) && !parsedState.game.roundResult) {
+          redirectToResults();
           return;
         }
 

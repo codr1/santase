@@ -1,7 +1,8 @@
-import { deleteRoom, getRoom, touchRoom } from "./rooms";
-import type { MatchState } from "./game/state";
+import { deleteRoom, forfeitMatch, getRoom, touchRoom, type Room } from "./rooms";
+import { isMatchOver, type MatchState } from "./game";
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
+const DISCONNECT_FORFEIT_TIMEOUT_MS = 30_000;
 
 type ClientRole = "host" | "guest";
 
@@ -110,9 +111,56 @@ function updateRoomConnections(roomCode: string): { hostConnected: boolean; gues
   return { hostConnected, guestConnected };
 }
 
-function statusMarkup(status: { guestConnected: boolean }): string {
+function statusMarkup(status: { hostConnected: boolean; guestConnected: boolean }): string {
   const message = status.guestConnected ? "Opponent connected" : "Waiting for opponent...";
-  return `<span>${message}</span>`;
+  return `<span data-host-connected="${status.hostConnected}" data-guest-connected="${status.guestConnected}">${message}</span>`;
+}
+
+function clearDisconnectTimeout(room: Room, role?: ClientRole): void {
+  if (!room.disconnectTimeout) {
+    return;
+  }
+  if (role && room.disconnectPendingRole && room.disconnectPendingRole !== role) {
+    return;
+  }
+  clearTimeout(room.disconnectTimeout);
+  room.disconnectTimeout = null;
+  room.disconnectPendingRole = null;
+}
+
+function startDisconnectTimeout(
+  roomCode: string,
+  room: Room,
+  disconnectedRole: ClientRole,
+): void {
+  if (room.disconnectTimeout) {
+    return;
+  }
+  if (isMatchOver(room.matchState)) {
+    return;
+  }
+  room.disconnectPendingRole = disconnectedRole;
+  room.disconnectTimeout = setTimeout(() => {
+    const updatedRoom = getRoom(roomCode);
+    if (!updatedRoom) {
+      return;
+    }
+    updatedRoom.disconnectTimeout = null;
+    updatedRoom.disconnectPendingRole = null;
+    if (isMatchOver(updatedRoom.matchState)) {
+      return;
+    }
+    const { hostConnected, guestConnected } = updatedRoom;
+    if (hostConnected === guestConnected) {
+      return;
+    }
+    const winnerIndex = hostConnected
+      ? updatedRoom.hostPlayerIndex
+      : ((updatedRoom.hostPlayerIndex === 0 ? 1 : 0) as 0 | 1);
+    if (forfeitMatch(updatedRoom, winnerIndex)) {
+      broadcastGameState(roomCode, updatedRoom.matchState);
+    }
+  }, DISCONNECT_FORFEIT_TIMEOUT_MS);
 }
 
 function removeClient(roomCode: string, client: SseClient): void {
@@ -136,6 +184,11 @@ function removeClient(roomCode: string, client: SseClient): void {
     if (client.role === "host" && !room.guestEverJoined && !status.hostConnected) {
       deleteRoom(roomCode, "host-left");
       clientsByRoom.delete(roomCode);
+      return;
+    }
+
+    if (room.guestEverJoined && !isMatchOver(room.matchState)) {
+      startDisconnectTimeout(roomCode, room, client.role);
     }
   }
 }
@@ -170,6 +223,7 @@ export function handleSse(request: Request, roomCode: string): Response {
       } else if (role === "guest") {
         console.log(`SSE guest connected: ${roomCode}`);
       }
+      clearDisconnectTimeout(room, role);
 
       if (role === "guest") {
         const isFirstGuest = !room.guestEverJoined;
@@ -186,6 +240,12 @@ export function handleSse(request: Request, roomCode: string): Response {
 
       const status = updateRoomConnections(roomCode);
       broadcast(roomCode, "status", statusMarkup(status));
+      if (room.guestEverJoined && !isMatchOver(room.matchState)) {
+        if (!status.hostConnected || !status.guestConnected) {
+          const disconnectedRole: ClientRole = !status.hostConnected ? "host" : "guest";
+          startDisconnectTimeout(roomCode, room, disconnectedRole);
+        }
+      }
       touchRoom(roomCode);
       client.heartbeat = setInterval(() => {
         if (client) {
