@@ -283,18 +283,18 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   <span class="font-medium">You</span>
                   <div class="flex items-center gap-4 text-sm">
                     <span class="text-emerald-200/70">Round</span>
-                    <span class="font-semibold">${roundScores[playerIndex]}</span>
+                    <span class="font-semibold" data-player-round-score>${roundScores[playerIndex]}</span>
                     <span class="text-emerald-200/70">Match</span>
-                    <span class="font-semibold">${matchScores[playerIndex]}</span>
+                    <span class="font-semibold" data-player-match-score>${matchScores[playerIndex]}</span>
                   </div>
                 </div>
                 <div class="flex items-center justify-between rounded-xl bg-emerald-900/30 px-3 py-2">
                   <span class="font-medium">Opponent</span>
                   <div class="flex items-center gap-4 text-sm">
                     <span class="text-emerald-200/70">Round</span>
-                    <span class="font-semibold">${roundScores[opponentIndex]}</span>
+                    <span class="font-semibold" data-opponent-round-score>${roundScores[opponentIndex]}</span>
                     <span class="text-emerald-200/70">Match</span>
-                    <span class="font-semibold">${matchScores[opponentIndex]}</span>
+                    <span class="font-semibold" data-opponent-match-score>${matchScores[opponentIndex]}</span>
                   </div>
                 </div>
               </div>
@@ -1433,6 +1433,23 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
         updateExchangeTrumpButton(parsedState);
         updateCloseDeckButton(parsedState);
+
+        const playerRoundScore = document.querySelector("[data-player-round-score]");
+        if (playerRoundScore) {
+          playerRoundScore.textContent = String(nextGame.roundScores[viewerIndex]);
+        }
+        const opponentRoundScore = document.querySelector("[data-opponent-round-score]");
+        if (opponentRoundScore) {
+          opponentRoundScore.textContent = String(nextGame.roundScores[opponentIndex]);
+        }
+        const playerMatchScore = document.querySelector("[data-player-match-score]");
+        if (playerMatchScore) {
+          playerMatchScore.textContent = String(parsedState.matchScores[viewerIndex]);
+        }
+        const opponentMatchScore = document.querySelector("[data-opponent-match-score]");
+        if (opponentMatchScore) {
+          opponentMatchScore.textContent = String(parsedState.matchScores[opponentIndex]);
+        }
 
         currentState = parsedState;
       });
