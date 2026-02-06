@@ -68,9 +68,6 @@ The Run-off
 
 Card Scoring
 
-<!-- BEGIN WIP: STORY-0025 -->
-Closing the Deck
-<!-- END WIP -->
 
 Game Scoring
 

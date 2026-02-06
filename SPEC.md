@@ -25,6 +25,7 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | GET | `/rooms/:code/game` | Game page view |
 | POST | `/rooms/:code/play` | Play a card (JSON body: `{card, marriageSuit?}`) |
 | POST | `/rooms/:code/exchange-trump` | Exchange trump 9 for the trump card |
+| POST | `/rooms/:code/close-deck` | Close the deck (leader only) |
 | GET | `/sse/:code` | SSE connection endpoint |
 | GET | `/public/*` | Static file serving (path-traversal protected) |
 
@@ -148,6 +149,27 @@ Same as play endpoint (hostToken query param or cookie).
 - Swaps trump 9 in hand with the trump card
 - Broadcasts `game-state` to all connected clients
 
+## Close Deck Endpoint
+
+`POST /rooms/:code/close-deck` allows the leader to close the deck, switching to closed-deck rules for the remainder of the round.
+
+### Player Resolution
+
+Same as play endpoint (hostToken query param or cookie).
+
+### Responses
+
+| Status | Condition |
+|--------|-----------|
+| 200 | Deck closed successfully |
+| 409 | Not the leader, trick in progress, stock too small, deck already closed, no trump card, round/match already ended |
+
+### Behavior
+
+- Validates player is the leader and `canCloseDeck` passes
+- Sets `isClosed` to true and `closedBy` to the closing player
+- Broadcasts `game-state` to all connected clients
+
 ## Templates
 
 HTML rendering with HTMX integration and Tailwind CSS styling.
@@ -180,6 +202,7 @@ Renders the interactive game board with viewer-specific perspective.
 - **Stock pile stacking**: Stock cards render as layered card backs (1 layer per 4 cards) with vertical offset for depth effect
 - **Won trick/card counters**: Numeric displays for each player's won tricks and won card counts, updated in real-time
 - **Trump 9 exchange button**: Shown when the player can exchange (is leader, holds trump 9, stock has 3+ cards, no trick in progress); sends POST to `/rooms/:code/exchange-trump`; optimistically updates hand and trump card
+- **Close deck button**: Shown when the player can close (is leader, no trick in progress, stock has 3+ cards, deck not already closed, trump card exists); sends POST to `/rooms/:code/close-deck`; visibility updated in real-time via client-side state checks
 - **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, won pile displays, trick area, and won counters without full page reload; uses GSAP animations for card additions/removals
 - **Click-to-play**: Player cards are clickable when it's the player's turn; clicking sends POST to `/rooms/:code/play`; automatically declares marriage when leading with K or Q of a declareable suit
 
@@ -241,8 +264,8 @@ type RoundResult = {
 **Functions**:
 - `dealInitialHands(deck, dealerIndex)`: Deals 6 cards per player (3, then trump, then 3 more), returns initial GameState with 11 cards in stock; sets `leader` to dealer's opponent
 - `getStockCount(state)`: Returns number of cards remaining in stock
-- `canCloseDeck(state)`: Returns true when stock has 3+ cards, deck is not already closed, trump card exists, and round hasn't ended
-- `closeDeck(state, playerIndex)`: Sets `isClosed` to true and `closedBy` to the closing player; throws when conditions not met
+- `canCloseDeck(state, playerIndex)`: Returns true when player is the leader, no trick is in progress, stock has 3+ cards, deck is not already closed, trump card exists, and round hasn't ended
+- `closeDeck(state, playerIndex)`: Sets `isClosed` to true and `closedBy` to the closing player; delegates to `canCloseDeck` for validation and throws specific errors (trick in progress, not leader, stock too small, already closed, no trump card)
 - `canDeclare66(state, playerIndex)`: Returns true if player has ≥66 points and round hasn't ended
 - `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 3 game points
 - `calculateGamePoints(opponentScore)`: Returns game points based on opponent score: 3 if 0, 2 if 1-32, 1 if ≥33
