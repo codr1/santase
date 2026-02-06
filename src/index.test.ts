@@ -170,6 +170,8 @@ const postNextRound = async (roomCode: string, asHost: boolean) => {
 
 const getResults = async (roomCode: string) =>
   handleRequest(new Request(`http://example/rooms/${roomCode}/results`));
+const getGame = async (roomCode: string) =>
+  handleRequest(new Request(`http://example/rooms/${roomCode}/game`));
 describe("resolvePort", () => {
   test("defaults to 3000 when env var is missing", () => {
     expect(resolvePort(undefined)).toBe(3000);
@@ -997,6 +999,23 @@ describe("results endpoint", () => {
     }
   });
 
+  test("renders the results page when the match ends in a draw", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [5, 5];
+    room.draw = true;
+
+    try {
+      const response = await getResults(room.code);
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain("Match drawn");
+      expect(body).toContain("Both players disconnected");
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
   test("shows the join page for expired rooms", async () => {
     const game = buildGameState({
       roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
@@ -1015,5 +1034,22 @@ describe("results endpoint", () => {
     expect(response.status).toBe(404);
     const body = await response.text();
     expect(body).toContain("Room not found. Double-check the code.");
+  });
+});
+
+describe("game endpoint", () => {
+  test("redirects to results when the room is a draw", async () => {
+    const room = createTestRoom(buildGameState(), 0);
+    room.draw = true;
+
+    try {
+      const response = await getGame(room.code);
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe(
+        `/rooms/${encodeURIComponent(room.code)}/results`,
+      );
+    } finally {
+      deleteRoom(room.code);
+    }
   });
 });

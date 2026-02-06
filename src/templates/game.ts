@@ -1,6 +1,13 @@
 import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import { getCardBackUrl, getCardImageUrl } from "./cards";
+import { ROUND_RESULT_LABELS } from "./shared-constants";
+import {
+  renderDisconnectSseSource,
+  renderIsHostDetectionSource,
+  renderParseStatusPayloadSource,
+  renderUpdateStatusTextSource,
+} from "./shared-client";
 import {
   canCloseDeck as canCloseDeckCheck,
   canDeclare66,
@@ -500,7 +507,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const declare66GracePeriodMs = Number.isFinite(initialState?.declare66GracePeriodMs)
         ? Math.max(0, Number(initialState.declare66GracePeriodMs))
         : defaultDeclare66GracePeriodMs;
-      const isHost = ${hostToken ? "true" : "false"};
+      ${renderIsHostDetectionSource(Boolean(hostToken))}
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
       const cardBackUrl = svgCardsCdn + "#back";
@@ -545,12 +552,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let graceCountdownIntervalId = null;
       let graceCountdownDeadlineMs = null;
 
-      const roundResultLabels = {
-        declared_66: "Declared 66",
-        false_declaration: "False declaration",
-        exhausted: "Last trick winner",
-        closed_failed: "Failed to close",
-      };
+      const roundResultLabels = ${JSON.stringify(ROUND_RESULT_LABELS)};
 
       const setText = (element, value) => {
         if (!element) {
@@ -639,6 +641,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         updateGraceCountdown();
         graceCountdownIntervalId = window.setInterval(updateGraceCountdown, 100);
       };
+      const sseRootEl = document.querySelector("[sse-connect]");
+      let redirectingToResults = false;
+      let sseProcessingEnabled = true;
 
       const resetRoundEndModal = (clearReadyState = false) => {
         roundEndCountdownValue = roundEndCountdownStart;
@@ -658,13 +663,32 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
 
       const isMatchOver = (state) => {
+        if (state?.draw === true) {
+          return true;
+        }
         if (!state?.matchScores) {
           return false;
         }
         return state.matchScores[0] >= 11 || state.matchScores[1] >= 11;
       };
 
+      ${renderDisconnectSseSource()}
+
+      const cleanupBeforeRedirect = () => {
+        if (roundEndCountdownId !== null) {
+          window.clearInterval(roundEndCountdownId);
+          roundEndCountdownId = null;
+        }
+        sseProcessingEnabled = false;
+        disconnectSse();
+      };
+
       const redirectToResults = () => {
+        if (redirectingToResults) {
+          return;
+        }
+        redirectingToResults = true;
+        cleanupBeforeRedirect();
         window.location.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
       };
 
@@ -841,53 +865,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
       };
 
-      // Keep in sync with parseStatusPayload in src/templates/lobby.ts.
-      const parseStatusPayload = (payload) => {
-        if (!payload) {
-          return null;
-        }
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed && typeof parsed === "object") {
-            return {
-              hostConnected: Boolean(parsed.hostConnected),
-              guestConnected: Boolean(parsed.guestConnected),
-            };
-          }
-        } catch {
-          // Not JSON, fall through to HTML parsing.
-        }
-        try {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(payload, "text/html");
-          const span = doc.body.firstElementChild;
-          if (!span) {
-            return null;
-          }
-          const hostAttr = span.getAttribute("data-host-connected");
-          const guestAttr = span.getAttribute("data-guest-connected");
-          if (hostAttr === null || guestAttr === null) {
-            return null;
-          }
-          return {
-            hostConnected: hostAttr === "true",
-            guestConnected: guestAttr === "true",
-          };
-        } catch {
-          return null;
-        }
-      };
+      ${renderParseStatusPayloadSource()}
 
-      const updateStatusText = (hostConnected, guestConnected) => {
-        if (!gameStatusEl) {
-          return;
-        }
-        const opponentIsConnected = isHost ? guestConnected : hostConnected;
-        const message = opponentIsConnected
-          ? opponentLabel + " connected"
-          : "Waiting for " + opponentLabel.toLowerCase() + "...";
-        gameStatusEl.textContent = message;
-      };
+      ${renderUpdateStatusTextSource("gameStatusEl")}
 
       const applyMatchCompleteState = (state) => {
         const matchOver = isMatchOver(state);
@@ -2005,6 +1985,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
       });
       document.body.addEventListener("htmx:sseMessage", (event) => {
+        if (!sseProcessingEnabled) return;
         const detail = event.detail || {};
         if (detail.type !== "ready-state") return;
         const payload = detail.data || "{}";
@@ -2016,11 +1997,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return;
         }
         latestReadyState = parsedState;
+        const viewerReady = isHost ? parsedState?.hostReady : parsedState?.guestReady;
+        if (viewerReady) {
+          readyRequestPending = false;
+        }
         syncOpponentReady(parsedState);
         updateReadyButtonState(parsedState);
       });
 
       document.body.addEventListener("htmx:sseMessage", (event) => {
+        if (!sseProcessingEnabled) return;
         const detail = event.detail || {};
         if (detail.type !== "status") return;
         const payload = detail.data || "";
@@ -2047,6 +2033,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       });
 
       document.body.addEventListener("htmx:sseMessage", (event) => {
+        if (!sseProcessingEnabled) return;
         const detail = event.detail || {};
         if (detail.type !== "game-state") return;
         const payload = detail.data || "{}";

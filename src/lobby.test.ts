@@ -96,7 +96,7 @@ describe("Lobby auto-start flow", () => {
     const guestConnectEvents = await readEvents(hostReader, 4);
     const statusEvent = guestConnectEvents.find((event) => event.event === "status");
     expect(statusEvent?.data).toBe(
-      '<span data-host-connected="true" data-guest-connected="true">Opponent connected</span>',
+      '<span data-host-connected="true" data-guest-connected="true"></span>',
     );
 
     guestAbort.abort();
