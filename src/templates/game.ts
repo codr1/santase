@@ -495,6 +495,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let nextRoundRequestPending = false;
       let roundEndCountdownId = null;
       let roundEndCountdownValue = roundEndCountdownStart;
+      let roundEndCountdownPaused = false;
+      let opponentConnected = true;
       let pendingTrickResolutionKey = null;
       let latestReadyState = null;
 
@@ -527,6 +529,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const matchCompleteEl = document.querySelector("[data-match-complete]");
 
       const resetRoundEndModal = (clearReadyState = false) => {
+        roundEndCountdownValue = roundEndCountdownStart;
+        roundEndCountdownPaused = false;
         setText(countdownEl, roundEndCountdownStart);
         if (opponentReadyEl) {
           opponentReadyEl.hidden = true;
@@ -625,16 +629,43 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
       };
 
-      const startRoundEndCountdown = () => {
+      const pauseCountdownForDisconnect = () => {
         if (!countdownEl) {
           return;
         }
         stopRoundEndCountdown();
-        roundEndCountdownValue = roundEndCountdownStart;
+        roundEndCountdownPaused = true;
+        setText(countdownEl, "Waiting for opponent...");
+        if (opponentReadyEl) {
+          opponentReadyEl.hidden = true;
+        }
+      };
+
+      const startRoundEndCountdown = () => {
+        startRoundEndCountdownFromValue(false);
+      };
+
+      const startRoundEndCountdownFromValue = (resume) => {
+        if (!countdownEl) {
+          return;
+        }
+        stopRoundEndCountdown();
+        if (
+          !resume ||
+          roundEndCountdownValue <= 0 ||
+          roundEndCountdownValue > roundEndCountdownStart
+        ) {
+          roundEndCountdownValue = roundEndCountdownStart;
+        }
+        roundEndCountdownPaused = false;
         setText(countdownEl, roundEndCountdownValue);
         roundEndCountdownId = window.setInterval(async () => {
           if (!currentState?.game?.roundResult) {
             stopRoundEndCountdown();
+            return;
+          }
+          if (!opponentConnected) {
+            pauseCountdownForDisconnect();
             return;
           }
           if (isMatchOver(currentState)) {
@@ -672,6 +703,28 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }, 1000);
       };
 
+      const updateCountdownForConnection = () => {
+        if (!countdownEl) {
+          return;
+        }
+        if (!roundEndModal || roundEndModal.hasAttribute("hidden")) {
+          return;
+        }
+        if (!currentState?.game?.roundResult) {
+          return;
+        }
+        if (isMatchOver(currentState)) {
+          return;
+        }
+        if (!opponentConnected) {
+          pauseCountdownForDisconnect();
+          return;
+        }
+        if (roundEndCountdownPaused) {
+          startRoundEndCountdownFromValue(true);
+        }
+      };
+
       const applyMatchCompleteState = (state) => {
         const matchOver = isMatchOver(state);
         if (roundEndActionsEl) {
@@ -697,7 +750,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         applyMatchCompleteState(state);
         roundEndModal.removeAttribute("hidden");
         if (!isMatchOver(state)) {
-          startRoundEndCountdown();
+          if (opponentConnected) {
+            startRoundEndCountdown();
+          } else {
+            pauseCountdownForDisconnect();
+          }
         }
         if (latestReadyState) {
           syncOpponentReady(latestReadyState);
@@ -1628,6 +1685,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             }
             readyRequestPending = true;
             updateReadyButtonState(latestReadyState);
+            let requestSucceeded = false;
             try {
               const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/ready", {
                 method: "POST",
@@ -1636,13 +1694,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               if (!response.ok) {
                 const errorText = await response.text().catch(() => "");
                 console.warn("Ready state rejected", response.status, errorText);
+              } else {
+                requestSucceeded = true;
               }
             } catch (error) {
               console.warn("Failed to send ready state", error);
-            } finally {
-              readyRequestPending = false;
-              updateReadyButtonState(latestReadyState);
             }
+            if (!requestSucceeded) {
+              readyRequestPending = false;
+            }
+            updateReadyButtonState(latestReadyState);
           });
         }
         updateExchangeTrumpButton(currentState);
@@ -1694,6 +1755,34 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         latestReadyState = parsedState;
         syncOpponentReady(parsedState);
         updateReadyButtonState(parsedState);
+      });
+
+      document.body.addEventListener("htmx:sseMessage", (event) => {
+        const detail = event.detail || {};
+        if (detail.type !== "status") return;
+        const payload = detail.data || "";
+        let nextOpponentConnected = opponentConnected;
+        if (payload) {
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed && typeof parsed === "object") {
+              const hostConnected = Boolean(parsed.hostConnected);
+              const guestConnected = Boolean(parsed.guestConnected);
+              nextOpponentConnected = isHost ? guestConnected : hostConnected;
+            }
+          } catch {
+            if (/waiting for opponent/i.test(payload)) {
+              nextOpponentConnected = false;
+            } else if (/opponent connected/i.test(payload)) {
+              nextOpponentConnected = true;
+            }
+          }
+        }
+        if (nextOpponentConnected === opponentConnected) {
+          return;
+        }
+        opponentConnected = nextOpponentConnected;
+        updateCountdownForConnection();
       });
 
       document.body.addEventListener("htmx:sseMessage", (event) => {
