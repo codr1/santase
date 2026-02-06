@@ -384,10 +384,74 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           </div>
         </section>
         <div id="game-state-listener" sse-swap="game-state" class="hidden"></div>
+        <div id="ready-state-listener" sse-swap="ready-state" class="hidden"></div>
 
         <p class="text-center text-sm text-emerald-200/70">
           <a href="/" class="hover:underline">Back to home</a>
         </p>
+      </div>
+      <div
+        data-round-end-modal
+        hidden
+        role="dialog"
+        aria-modal="true"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+      >
+        <div class="w-full max-w-xl rounded-xl bg-emerald-900 p-6 shadow-lg">
+          <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Round complete</p>
+          <div class="mt-2">
+            <h2 class="text-2xl font-semibold" data-round-winner>Round complete</h2>
+            <p class="text-sm text-emerald-200/80" data-round-reason></p>
+          </div>
+          <div class="mt-4 grid gap-3">
+            <div class="flex items-center justify-between rounded-xl bg-emerald-950/70 px-4 py-3">
+              <span class="font-medium">You</span>
+              <div class="flex items-center gap-4 text-sm">
+                <span class="text-emerald-200/70">Round</span>
+                <span class="font-semibold" data-round-score-you>0</span>
+                <span class="text-emerald-200/70">Match</span>
+                <span class="font-semibold" data-match-score-you>0</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between rounded-xl bg-emerald-900/40 px-4 py-3">
+              <span class="font-medium">Opponent</span>
+              <div class="flex items-center gap-4 text-sm">
+                <span class="text-emerald-200/70">Round</span>
+                <span class="font-semibold" data-round-score-opponent>0</span>
+                <span class="text-emerald-200/70">Match</span>
+                <span class="font-semibold" data-match-score-opponent>0</span>
+              </div>
+            </div>
+          </div>
+          <p class="mt-3 text-sm text-emerald-200/80">
+            Game points earned: <span class="font-semibold" data-game-points>0</span>
+          </p>
+          <div
+            class="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-emerald-950/70 px-4 py-3"
+            data-round-end-actions
+          >
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/70">Next round in</p>
+              <span class="text-3xl font-semibold" data-countdown>10</span>
+            </div>
+            <button
+              type="button"
+              class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+              data-ready-btn
+            >
+              Ready
+            </button>
+          </div>
+          <p class="mt-3 text-sm text-emerald-200/80" data-opponent-ready hidden>
+            Opponent is ready
+          </p>
+          <div class="mt-4 text-sm text-emerald-100/90" data-match-complete hidden>
+            <p>Match complete. Thanks for playing!</p>
+            <a href="/" class="mt-3 inline-flex text-sm font-semibold text-emerald-100 underline">
+              Back to home
+            </a>
+          </div>
+        </div>
       </div>
     </main>
     <script>
@@ -395,6 +459,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentIndex = ${opponentIndex};
       const roomCode = ${JSON.stringify(code)};
       const initialState = ${JSON.stringify(matchState)};
+      const isHost = ${hostToken ? "true" : "false"};
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
       const cardBackUrl = svgCardsCdn + "#back";
@@ -420,12 +485,240 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const waitingOffsetPx = 11;
       const trickResolutionDelayMs = 1000;
       const trickResolutionDuration = 0.6;
+      const roundEndCountdownStart = 10;
       let animationsSettled = true;
       let activeAnimations = 0;
       let playRequestPending = false;
       let exchangeRequestPending = false;
       let closeRequestPending = false;
+      let readyRequestPending = false;
+      let nextRoundRequestPending = false;
+      let roundEndCountdownId = null;
+      let roundEndCountdownValue = roundEndCountdownStart;
       let pendingTrickResolutionKey = null;
+      let latestReadyState = null;
+
+      const roundResultLabels = {
+        declared_66: "Declared 66",
+        false_declaration: "False declaration",
+        exhausted: "Last trick winner",
+        closed_failed: "Failed to close",
+      };
+
+      const setText = (element, value) => {
+        if (!element) {
+          return;
+        }
+        element.textContent = String(value);
+      };
+
+      const roundEndModal = document.querySelector("[data-round-end-modal]");
+      const roundWinnerEl = document.querySelector("[data-round-winner]");
+      const roundReasonEl = document.querySelector("[data-round-reason]");
+      const roundScoreYouEl = document.querySelector("[data-round-score-you]");
+      const roundScoreOpponentEl = document.querySelector("[data-round-score-opponent]");
+      const matchScoreYouEl = document.querySelector("[data-match-score-you]");
+      const matchScoreOpponentEl = document.querySelector("[data-match-score-opponent]");
+      const gamePointsEl = document.querySelector("[data-game-points]");
+      const countdownEl = document.querySelector("[data-countdown]");
+      const readyButton = document.querySelector("[data-ready-btn]");
+      const opponentReadyEl = document.querySelector("[data-opponent-ready]");
+      const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
+      const matchCompleteEl = document.querySelector("[data-match-complete]");
+
+      const resetRoundEndModal = (clearReadyState = false) => {
+        setText(countdownEl, roundEndCountdownStart);
+        if (opponentReadyEl) {
+          opponentReadyEl.hidden = true;
+        }
+        if (readyButton) {
+          readyButton.disabled = false;
+          readyButton.textContent = "Ready";
+        }
+        readyRequestPending = false;
+        if (clearReadyState) {
+          latestReadyState = null;
+        }
+      };
+
+      const isMatchOver = (state) => {
+        if (!state?.matchScores) {
+          return false;
+        }
+        return state.matchScores[0] >= 11 || state.matchScores[1] >= 11;
+      };
+
+      const getMatchWinnerIndex = (state) => {
+        if (!state?.matchScores) {
+          return null;
+        }
+        const [scoreA, scoreB] = state.matchScores;
+        if (scoreA === scoreB) {
+          return null;
+        }
+        return scoreA > scoreB ? 0 : 1;
+      };
+
+      const updateRoundEndModal = (state) => {
+        const roundResult = state?.game?.roundResult;
+        if (!roundResult) {
+          return;
+        }
+        const matchOver = isMatchOver(state);
+        const matchWinner = getMatchWinnerIndex(state);
+        const winnerText = matchOver
+          ? matchWinner === viewerIndex
+            ? "You won the match!"
+            : matchWinner === opponentIndex
+              ? "Opponent won the match!"
+              : "Match complete"
+          : roundResult.winner === viewerIndex
+            ? "You won!"
+            : "Opponent won!";
+        const reasonText = matchOver
+          ? "Match complete"
+          : roundResultLabels[roundResult.reason] ?? "Round complete";
+        setText(roundWinnerEl, winnerText);
+        setText(roundReasonEl, reasonText);
+        setText(roundScoreYouEl, state.game.roundScores[viewerIndex]);
+        setText(roundScoreOpponentEl, state.game.roundScores[opponentIndex]);
+        setText(matchScoreYouEl, state.matchScores[viewerIndex]);
+        setText(matchScoreOpponentEl, state.matchScores[opponentIndex]);
+        setText(gamePointsEl, roundResult.gamePoints);
+      };
+
+      const syncOpponentReady = (readyState) => {
+        if (!opponentReadyEl) {
+          return;
+        }
+        if (currentState && isMatchOver(currentState)) {
+          opponentReadyEl.hidden = true;
+          return;
+        }
+        const opponentReady = isHost ? readyState?.guestReady : readyState?.hostReady;
+        opponentReadyEl.hidden = !opponentReady;
+      };
+
+      const updateReadyButtonState = (readyState) => {
+        if (!readyButton) {
+          return;
+        }
+        if (currentState && isMatchOver(currentState)) {
+          readyButton.disabled = true;
+          readyButton.textContent = "Match complete";
+          return;
+        }
+        const viewerReady = isHost ? readyState?.hostReady : readyState?.guestReady;
+        if (viewerReady || readyRequestPending) {
+          readyButton.disabled = true;
+          readyButton.textContent = "Waiting...";
+        } else {
+          readyButton.disabled = false;
+          readyButton.textContent = "Ready";
+        }
+      };
+
+      const stopRoundEndCountdown = () => {
+        if (roundEndCountdownId !== null) {
+          window.clearInterval(roundEndCountdownId);
+          roundEndCountdownId = null;
+        }
+      };
+
+      const startRoundEndCountdown = () => {
+        if (!countdownEl) {
+          return;
+        }
+        stopRoundEndCountdown();
+        roundEndCountdownValue = roundEndCountdownStart;
+        setText(countdownEl, roundEndCountdownValue);
+        roundEndCountdownId = window.setInterval(async () => {
+          if (!currentState?.game?.roundResult) {
+            stopRoundEndCountdown();
+            return;
+          }
+          if (isMatchOver(currentState)) {
+            stopRoundEndCountdown();
+            return;
+          }
+          roundEndCountdownValue -= 1;
+          if (roundEndCountdownValue <= 0) {
+            setText(countdownEl, 0);
+            stopRoundEndCountdown();
+            if (nextRoundRequestPending) {
+              return;
+            }
+            nextRoundRequestPending = true;
+            try {
+              const response = await fetch(
+                "/rooms/" + encodeURIComponent(roomCode) + "/next-round",
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                },
+              );
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                console.warn("Next round rejected", response.status, errorText);
+              }
+            } catch (error) {
+              console.warn("Failed to start next round", error);
+            } finally {
+              nextRoundRequestPending = false;
+            }
+          } else {
+            setText(countdownEl, roundEndCountdownValue);
+          }
+        }, 1000);
+      };
+
+      const applyMatchCompleteState = (state) => {
+        const matchOver = isMatchOver(state);
+        if (roundEndActionsEl) {
+          roundEndActionsEl.hidden = matchOver;
+        }
+        if (matchCompleteEl) {
+          matchCompleteEl.hidden = !matchOver;
+        }
+        if (matchOver) {
+          if (opponentReadyEl) {
+            opponentReadyEl.hidden = true;
+          }
+          stopRoundEndCountdown();
+        }
+      };
+
+      const showRoundEndModal = (state) => {
+        if (!roundEndModal) {
+          return;
+        }
+        resetRoundEndModal();
+        updateRoundEndModal(state);
+        applyMatchCompleteState(state);
+        roundEndModal.removeAttribute("hidden");
+        if (!isMatchOver(state)) {
+          startRoundEndCountdown();
+        }
+        if (latestReadyState) {
+          syncOpponentReady(latestReadyState);
+          updateReadyButtonState(latestReadyState);
+        }
+      };
+
+      const hideRoundEndModal = () => {
+        if (!roundEndModal) {
+          return;
+        }
+        roundEndModal.setAttribute("hidden", "");
+        stopRoundEndCountdown();
+        resetRoundEndModal(true);
+        if (matchCompleteEl) {
+          matchCompleteEl.hidden = true;
+        }
+        if (roundEndActionsEl) {
+          roundEndActionsEl.hidden = false;
+        }
+      };
 
       const trackAnimations = (count) => {
         if (count <= 0) {
@@ -1322,8 +1615,41 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             }
           });
         }
+        if (readyButton) {
+          readyButton.addEventListener("click", async () => {
+            if (readyRequestPending) {
+              return;
+            }
+            if (!currentState?.game?.roundResult) {
+              return;
+            }
+            if (isMatchOver(currentState)) {
+              return;
+            }
+            readyRequestPending = true;
+            updateReadyButtonState(latestReadyState);
+            try {
+              const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/ready", {
+                method: "POST",
+                credentials: "same-origin",
+              });
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                console.warn("Ready state rejected", response.status, errorText);
+              }
+            } catch (error) {
+              console.warn("Failed to send ready state", error);
+            } finally {
+              readyRequestPending = false;
+              updateReadyButtonState(latestReadyState);
+            }
+          });
+        }
         updateExchangeTrumpButton(currentState);
         updateCloseDeckButton(currentState);
+        if (currentState?.game?.roundResult) {
+          showRoundEndModal(currentState);
+        }
         if (!window.gsap) {
           return;
         }
@@ -1354,6 +1680,22 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         });
 
       });
+      document.body.addEventListener("htmx:sseMessage", (event) => {
+        const detail = event.detail || {};
+        if (detail.type !== "ready-state") return;
+        const payload = detail.data || "{}";
+        let parsedState = null;
+        try {
+          parsedState = JSON.parse(payload);
+        } catch {
+          console.warn("ready-state payload was not valid JSON");
+          return;
+        }
+        latestReadyState = parsedState;
+        syncOpponentReady(parsedState);
+        updateReadyButtonState(parsedState);
+      });
+
       document.body.addEventListener("htmx:sseMessage", (event) => {
         const detail = event.detail || {};
         if (detail.type !== "game-state") return;
@@ -1452,6 +1794,20 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
 
         currentState = parsedState;
+        if (roundEndModal) {
+          const hasRoundResult = Boolean(parsedState.game.roundResult);
+          const isHidden = roundEndModal.hasAttribute("hidden");
+          if (hasRoundResult) {
+            if (isHidden) {
+              showRoundEndModal(parsedState);
+            } else {
+              updateRoundEndModal(parsedState);
+              applyMatchCompleteState(parsedState);
+            }
+          } else if (!hasRoundResult && !isHidden) {
+            hideRoundEndModal();
+          }
+        }
       });
     </script>
   `;
