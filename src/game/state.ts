@@ -83,7 +83,9 @@ export function getViewerMatchState(
 ): ViewerMatchState {
   const opponentIndex = viewerIndex === 0 ? 1 : 0;
   const roundScores: [number, number] = [...matchState.game.roundScores];
-  roundScores[opponentIndex] = Number.NaN;
+  if (matchState.game.roundResult === null) {
+    roundScores[opponentIndex] = Number.NaN;
+  }
   const playerHands: [Card[] | HiddenCards, Card[] | HiddenCards] = [
     matchState.game.playerHands[0],
     matchState.game.playerHands[1],
