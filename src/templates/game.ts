@@ -2,14 +2,14 @@ import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import { getCardBackUrl, getCardImageUrl } from "./cards";
 import {
-  DECLARE_THRESHOLD,
   canCloseDeck as canCloseDeckCheck,
   canDeclare66,
   canExchangeTrump9,
+  DECLARE_66_GRACE_PERIOD_MS,
   getViewerMatchState,
 } from "../game";
 import type { Card, Suit } from "../game/cards";
-import type { MatchState } from "../game/state";
+import type { MatchState, ViewerMatchState } from "../game/state";
 
 type GameOptions = {
   code: string;
@@ -139,11 +139,17 @@ function renderTrickSlot(role: "leader" | "follower", card?: Card | null): strin
   </div>`;
 }
 
-function getActivePlayerIndex(game: MatchState["game"]): 0 | 1 {
+function getActivePlayerIndex(
+  game: Pick<MatchState["game"], "currentTrick" | "leader">,
+): 0 | 1 {
   if (game.currentTrick) {
     return game.currentTrick.leaderIndex === 0 ? 1 : 0;
   }
   return game.leader;
+}
+
+function countCards(cards: Card[] | { count: number }): number {
+  return Array.isArray(cards) ? cards.length : cards.count;
 }
 
 export function renderGamePage({ code, matchState, viewerIndex, hostToken }: GameOptions): string {
@@ -151,7 +157,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
   const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
   const safeSseUrl = escapeHtml(sseUrl);
-  const viewerState = getViewerMatchState(matchState, viewerIndex);
+  const viewerState: ViewerMatchState = getViewerMatchState(matchState, viewerIndex);
   const {
     game: {
       playerHands,
@@ -166,7 +172,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const playerIndex = viewerIndex;
   const opponentIndex = playerIndex === 0 ? 1 : 0;
   const playerHand = playerHands[playerIndex];
-  const opponentHandCount = playerHands[opponentIndex].length;
+  const opponentHandCount = countCards(playerHands[opponentIndex]);
+  if (!Array.isArray(playerHand)) {
+    throw new Error("Viewer hand must be visible as an array.");
+  }
   const playerWonCards = wonTricks[playerIndex].length;
   const opponentWonCards = wonTricks[opponentIndex].length;
   const playerWonTricks = Math.floor(playerWonCards / 2);
@@ -186,11 +195,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const trumpCardMarkup = trumpCard
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
     : renderEmptyCardSlot("inset");
-  const stockCount = stock.length;
+  const stockCount = stock.count;
   const stockPileMarkup = renderStockPile(stockCount);
-  const canExchangeTrump = canExchangeTrump9(viewerState.game, playerIndex);
-  const canCloseDeck = canCloseDeckCheck(viewerState.game, playerIndex);
-  const canDeclare = canDeclare66(viewerState.game, playerIndex);
+  const canExchangeTrump = canExchangeTrump9(matchState.game, playerIndex);
+  const canCloseDeck = canCloseDeckCheck(matchState.game, playerIndex);
+  const canDeclare = canDeclare66(matchState.game, playerIndex);
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -232,6 +241,13 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
     >
       <div class="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Game Starting</h1>
+        <div
+          class="fixed right-4 top-4 z-50 max-w-xs rounded-xl bg-rose-500/95 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/30 sm:right-8"
+          data-action-notice
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
         <header class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-900/60 px-4 py-3 shadow-lg shadow-black/20 ring-1 ring-emerald-400/20">
           <div class="flex flex-col gap-1">
             <span class="text-xs uppercase tracking-[0.35em] text-emerald-200/80">Room</span>
@@ -317,6 +333,9 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
               <p class="mt-3 text-center text-xs text-emerald-200/70" data-trick-status="true">
                 ${trickStatusText}
               </p>
+              <p class="mt-2 text-center text-xs font-semibold text-amber-200" data-grace-countdown="true" hidden>
+                Leader can play in 0.0s
+              </p>
             </div>
 
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
@@ -351,7 +370,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   </button>
                   <button
                     type="button"
-                    class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+                    class="rounded-full bg-rose-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white shadow-lg shadow-black/20 transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:bg-rose-300/60"
                     data-declare-66="true"
                     ${canDeclare ? "" : "hidden"}
                   >
@@ -477,6 +496,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentIndex = ${opponentIndex};
       const roomCode = ${JSON.stringify(code)};
       const initialState = ${JSON.stringify(viewerState)};
+      const defaultDeclare66GracePeriodMs = ${DECLARE_66_GRACE_PERIOD_MS};
+      const declare66GracePeriodMs = Number.isFinite(initialState?.declare66GracePeriodMs)
+        ? Math.max(0, Number(initialState.declare66GracePeriodMs))
+        : defaultDeclare66GracePeriodMs;
       const isHost = ${hostToken ? "true" : "false"};
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
@@ -504,7 +527,6 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const trickResolutionDelayMs = 1000;
       const trickResolutionDuration = 0.6;
       const roundEndCountdownStart = 10;
-      const declareThreshold = ${DECLARE_THRESHOLD};
       let animationsSettled = true;
       let activeAnimations = 0;
       let playRequestPending = false;
@@ -520,6 +542,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let declareRequestPending = false;
       let pendingTrickResolutionKey = null;
       let latestReadyState = null;
+      let graceCountdownIntervalId = null;
+      let graceCountdownDeadlineMs = null;
 
       const roundResultLabels = {
         declared_66: "Declared 66",
@@ -549,6 +573,72 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentReadyEl = document.querySelector("[data-opponent-ready]");
       const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
       const matchCompleteEl = document.querySelector("[data-match-complete]");
+      const actionNoticeEl = document.querySelector("[data-action-notice]");
+      const graceCountdownEl = document.querySelector("[data-grace-countdown]");
+      const actionNoticeAutoDismissMs = 4000;
+      let actionNoticeTimeoutId = null;
+
+      const hideActionNotice = () => {
+        if (!actionNoticeEl) {
+          return;
+        }
+        actionNoticeEl.hidden = true;
+        actionNoticeEl.textContent = "";
+      };
+
+      const showActionNotice = (message) => {
+        if (!actionNoticeEl) {
+          return;
+        }
+        if (actionNoticeTimeoutId !== null) {
+          window.clearTimeout(actionNoticeTimeoutId);
+        }
+        actionNoticeEl.textContent = message;
+        actionNoticeEl.hidden = false;
+        actionNoticeTimeoutId = window.setTimeout(() => {
+          hideActionNotice();
+          actionNoticeTimeoutId = null;
+        }, actionNoticeAutoDismissMs);
+      };
+
+      const stopGraceCountdown = () => {
+        if (graceCountdownIntervalId !== null) {
+          window.clearInterval(graceCountdownIntervalId);
+          graceCountdownIntervalId = null;
+        }
+        graceCountdownDeadlineMs = null;
+        if (!graceCountdownEl) {
+          return;
+        }
+        graceCountdownEl.hidden = true;
+      };
+
+      const updateGraceCountdown = () => {
+        if (!graceCountdownEl || graceCountdownDeadlineMs === null) {
+          return;
+        }
+        const remainingMs = Math.max(0, graceCountdownDeadlineMs - Date.now());
+        const remainingSeconds = (remainingMs / 1000).toFixed(1);
+        graceCountdownEl.textContent = "Leader can play in " + remainingSeconds + "s";
+        graceCountdownEl.hidden = false;
+        if (remainingMs <= 0) {
+          stopGraceCountdown();
+        }
+      };
+
+      const startGraceCountdown = (durationMs) => {
+        const safeDurationMs = Number.isFinite(durationMs)
+          ? Math.max(0, Number(durationMs))
+          : declare66GracePeriodMs;
+        if (safeDurationMs <= 0) {
+          stopGraceCountdown();
+          return;
+        }
+        stopGraceCountdown();
+        graceCountdownDeadlineMs = Date.now() + safeDurationMs;
+        updateGraceCountdown();
+        graceCountdownIntervalId = window.setInterval(updateGraceCountdown, 100);
+      };
 
       const resetRoundEndModal = (clearReadyState = false) => {
         roundEndCountdownValue = roundEndCountdownStart;
@@ -816,6 +906,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       };
 
       const showRoundEndModal = (state) => {
+        stopGraceCountdown();
         if (isMatchOver(state)) {
           redirectToResults();
           return;
@@ -845,6 +936,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           return;
         }
         roundEndModal.setAttribute("hidden", "");
+        stopGraceCountdown();
         stopRoundEndCountdown();
         resetRoundEndModal(true);
         if (matchCompleteEl) {
@@ -1043,6 +1135,20 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         return game.leader;
       };
+      const getHandCount = (hand) => {
+        if (Array.isArray(hand)) {
+          return hand.length;
+        }
+        const count = Number(hand?.count);
+        return Number.isFinite(count) && count >= 0 ? count : 0;
+      };
+      const getStockCount = (stock) => {
+        if (Array.isArray(stock)) {
+          return stock.length;
+        }
+        const count = Number(stock?.count);
+        return Number.isFinite(count) && count >= 0 ? count : 0;
+      };
       const getDisplayTrick = (game) => game?.currentTrick ?? game?.lastCompletedTrick ?? null;
       const isPlayerTurn = (state, playerIndex) =>
         getActivePlayerIndex(state?.game) === playerIndex;
@@ -1060,10 +1166,13 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!game.trumpCard) {
           return false;
         }
-        if (!Array.isArray(game.stock) || game.stock.length <= 2) {
+        if (getStockCount(game.stock) <= 2) {
           return false;
         }
         const hand = game.playerHands?.[playerIndex] ?? [];
+        if (!Array.isArray(hand)) {
+          return false;
+        }
         return hand.some((card) => card.rank === "9" && card.suit === game.trumpSuit);
       };
       const canCloseDeckState = (state, playerIndex) => {
@@ -1080,7 +1189,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (game.leader !== playerIndex) {
           return false;
         }
-        if (!Array.isArray(game.stock) || game.stock.length < 3) {
+        if (getStockCount(game.stock) < 3) {
           return false;
         }
         if (game.isClosed) {
@@ -1093,10 +1202,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!game || game.roundResult) {
           return false;
         }
-        return (
-          game.canDeclareWindow === playerIndex &&
-          (game.roundScores?.[playerIndex] ?? 0) >= declareThreshold
-        );
+        return game.canDeclareWindow === playerIndex;
       };
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
@@ -1663,7 +1769,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       }
       const stockPile = document.querySelector("[data-stock-pile]");
       if (stockPile) {
-        stockPile.dataset.stockCount = String(initialState.game.stock.length);
+        stockPile.dataset.stockCount = String(getStockCount(initialState.game.stock));
       }
       const playerWonPile = document.querySelector("[data-player-won-pile]");
       if (playerWonPile) {
@@ -1815,10 +1921,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                 },
               );
               if (!response.ok) {
-                const errorText = await response.text().catch(() => "");
-                console.warn("Declare 66 rejected", response.status, errorText);
+                const body = await response.json().catch(() => null);
+                console.warn("Declare 66 rejected", response.status, body);
+                showActionNotice(body?.error || "Declare 66 failed. Try again.");
               }
             } catch (error) {
+              showActionNotice("Declare 66 failed. Check your connection and try again.");
               console.warn("Failed to declare 66", error);
             } finally {
               declareRequestPending = false;
@@ -1961,6 +2069,14 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
         const nextGame = parsedState.game;
         const currentGame = currentState?.game;
+        const trickJustCompleted = Boolean(currentGame?.currentTrick) &&
+          !nextGame.currentTrick &&
+          currentGame.leader !== nextGame.leader;
+        if (nextGame.currentTrick || nextGame.roundResult) {
+          stopGraceCountdown();
+        } else if (trickJustCompleted) {
+          startGraceCountdown(parsedState.declare66GracePeriodMs);
+        }
 
         if (
           !currentGame ||
@@ -1985,17 +2101,18 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
         if (
           !currentGame ||
-          currentGame.playerHands[opponentIndex].length !== nextGame.playerHands[opponentIndex].length
+          getHandCount(currentGame.playerHands[opponentIndex]) !==
+            getHandCount(nextGame.playerHands[opponentIndex])
         ) {
-          updateOpponentHand(nextGame.playerHands[opponentIndex].length);
+          updateOpponentHand(getHandCount(nextGame.playerHands[opponentIndex]));
         }
 
         if (!currentGame || !areCardsEqual(currentGame.trumpCard, nextGame.trumpCard)) {
           updateTrumpCard(nextGame.trumpCard);
         }
 
-        if (!currentGame || currentGame.stock.length !== nextGame.stock.length) {
-          updateStockPile(nextGame.stock.length);
+        if (!currentGame || getStockCount(currentGame.stock) !== getStockCount(nextGame.stock)) {
+          updateStockPile(getStockCount(nextGame.stock));
         }
 
         if (

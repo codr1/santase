@@ -10,6 +10,7 @@ import {
   type Card,
   type Suit,
 } from "./cards";
+import { DECLARE_66_GRACE_PERIOD_MS } from "./config";
 
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
@@ -56,14 +57,48 @@ export type MatchState = {
   leaderIndex: 0 | 1;
 };
 
-export function getViewerMatchState(matchState: MatchState, viewerIndex: 0 | 1): MatchState {
+export type HiddenCards = {
+  count: number;
+};
+
+export type ViewerGameState = Omit<GameState, "playerHands" | "stock"> & {
+  playerHands: [Card[] | HiddenCards, Card[] | HiddenCards];
+  stock: HiddenCards;
+};
+
+export type ViewerMatchState = Omit<MatchState, "game"> & {
+  game: ViewerGameState;
+  declare66GracePeriodMs: number;
+};
+
+export type PlayTrickResult = {
+  game: GameState;
+  winnerIndex: 0 | 1;
+  trickPoints: number;
+};
+
+export function getViewerMatchState(
+  matchState: MatchState,
+  viewerIndex: 0 | 1,
+): ViewerMatchState {
   const opponentIndex = viewerIndex === 0 ? 1 : 0;
   const roundScores: [number, number] = [...matchState.game.roundScores];
   roundScores[opponentIndex] = Number.NaN;
+  const playerHands: [Card[] | HiddenCards, Card[] | HiddenCards] = [
+    matchState.game.playerHands[0],
+    matchState.game.playerHands[1],
+  ];
+  playerHands[opponentIndex] = {
+    count: matchState.game.playerHands[opponentIndex].length,
+  };
+
   return {
     ...matchState,
+    declare66GracePeriodMs: DECLARE_66_GRACE_PERIOD_MS,
     game: {
       ...matchState.game,
+      playerHands,
+      stock: { count: matchState.game.stock.length },
       roundScores,
     },
   };
@@ -266,10 +301,7 @@ export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
   if (state.roundResult) {
     return false;
   }
-  return (
-    state.canDeclareWindow === playerIndex &&
-    state.roundScores[playerIndex] >= DECLARE_THRESHOLD
-  );
+  return state.canDeclareWindow === playerIndex;
 }
 
 export function declare66(state: GameState, playerIndex: 0 | 1): GameState {
@@ -455,7 +487,7 @@ export function playTrick(
   leaderIndex: 0 | 1,
   leaderCard: Card,
   followerCard: Card,
-): GameState {
+): PlayTrickResult {
   const followerIndex = leaderIndex === 0 ? 1 : 0;
   const leaderHand = state.playerHands[leaderIndex];
   const followerHand = state.playerHands[followerIndex];
@@ -463,7 +495,12 @@ export function playTrick(
   const leaderCardIndex = leaderHand.findIndex(
     (card) => card.suit === leaderCard.suit && card.rank === leaderCard.rank,
   );
-  if (leaderCardIndex < 0) {
+  const leaderCardOnTable =
+    state.currentTrick !== null &&
+    state.currentTrick.leaderIndex === leaderIndex &&
+    state.currentTrick.leaderCard.suit === leaderCard.suit &&
+    state.currentTrick.leaderCard.rank === leaderCard.rank;
+  if (leaderCardIndex < 0 && !leaderCardOnTable) {
     throw new Error("Leader card not found in hand.");
   }
 
@@ -491,7 +528,8 @@ export function playTrick(
     }
   }
 
-  const nextLeaderHand = removeCardAt(leaderHand, leaderCardIndex);
+  const nextLeaderHand =
+    leaderCardIndex >= 0 ? removeCardAt(leaderHand, leaderCardIndex) : [...leaderHand];
   const nextFollowerHand = removeCardAt(followerHand, followerCardIndex);
   const nextHands: [Card[], Card[]] =
     leaderIndex === 0 ? [nextLeaderHand, nextFollowerHand] : [nextFollowerHand, nextLeaderHand];
@@ -517,10 +555,8 @@ export function playTrick(
   ];
   nextRoundScores[winnerIndex] += trickPoints;
 
-  const clearedState = { ...state, canDeclareWindow: null };
-
-  return {
-    ...clearedState,
+  const resolvedState: GameState = {
+    ...state,
     playerHands: nextHands,
     leader: nextLeader,
     wonTricks: nextWonTricks,
@@ -528,6 +564,13 @@ export function playTrick(
     currentTrick: null,
     lastCompletedTrick: { leaderIndex, leaderCard, followerCard },
     canDeclareWindow: winnerIndex,
+  };
+
+  const game = drawFromStock(resolvedState, winnerIndex);
+  return {
+    game,
+    winnerIndex,
+    trickPoints,
   };
 }
 

@@ -5,6 +5,7 @@ import {
   TRUMP_MARRIAGE_POINTS,
   createDeck,
 } from "./cards";
+import { DECLARE_66_GRACE_PERIOD_MS } from "./config";
 import {
   canDeclareMarriage,
   canDeclare66,
@@ -17,6 +18,7 @@ import {
   drawFromStock,
   exchangeTrump9,
   findDeclareableMarriages,
+  getViewerMatchState,
   applyRoundResult,
   getMatchWinner,
   isMatchOver,
@@ -31,6 +33,7 @@ import {
   startMatch,
   startNewRound,
   type GameState,
+  type MatchState,
 } from "./state";
 
 describe("dealInitialHands", () => {
@@ -98,6 +101,75 @@ describe("dealInitialHands", () => {
     const state = dealInitialHands(deck, 1);
 
     expect(state.leader).toBe(0);
+  });
+});
+
+describe("getViewerMatchState", () => {
+  const buildMatchState = (): MatchState => ({
+    game: {
+      playerHands: [
+        [
+          { suit: "hearts", rank: "A" },
+          { suit: "clubs", rank: "K" },
+        ],
+        [
+          { suit: "spades", rank: "9" },
+          { suit: "diamonds", rank: "10" },
+          { suit: "hearts", rank: "Q" },
+        ],
+      ],
+      stock: [
+        { suit: "clubs", rank: "A" },
+        { suit: "spades", rank: "J" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+      isClosed: false,
+      leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
+      closedBy: null,
+      wonTricks: [[], []],
+      roundScores: [12, 8],
+      declaredMarriages: [],
+      canDeclareWindow: null,
+      roundResult: null,
+    },
+    matchScores: [2, 3],
+    dealerIndex: 0,
+    leaderIndex: 1,
+  });
+
+  test("hides opponent hand cards and stock cards behind counts", () => {
+    const matchState = buildMatchState();
+
+    const viewerState = getViewerMatchState(matchState, 0);
+
+    expect(viewerState.game.playerHands[0]).toEqual(matchState.game.playerHands[0]);
+    expect(viewerState.game.playerHands[1]).toEqual({
+      count: matchState.game.playerHands[1].length,
+    });
+    expect(viewerState.game.stock).toEqual({ count: matchState.game.stock.length });
+    expect(Array.isArray(viewerState.game.playerHands[1])).toBe(false);
+    expect(Array.isArray(viewerState.game.stock)).toBe(false);
+    expect(Number.isNaN(viewerState.game.roundScores[1])).toBe(true);
+    expect(viewerState.declare66GracePeriodMs).toBe(DECLARE_66_GRACE_PERIOD_MS);
+  });
+
+  test("keeps player 1 hand visible and hides player 0 hand for viewer 1", () => {
+    const matchState = buildMatchState();
+
+    const viewerState = getViewerMatchState(matchState, 1);
+
+    expect(viewerState.game.playerHands[1]).toEqual(matchState.game.playerHands[1]);
+    expect(viewerState.game.playerHands[0]).toEqual({
+      count: matchState.game.playerHands[0].length,
+    });
+    expect(viewerState.game.stock).toEqual({ count: matchState.game.stock.length });
+    expect(Array.isArray(viewerState.game.playerHands[0])).toBe(false);
+    expect(Array.isArray(viewerState.game.stock)).toBe(false);
+    expect(Number.isNaN(viewerState.game.roundScores[0])).toBe(true);
+    expect(viewerState.declare66GracePeriodMs).toBe(DECLARE_66_GRACE_PERIOD_MS);
   });
 });
 
@@ -615,17 +687,17 @@ describe("canDeclare66", () => {
     expect(canDeclare66(state, 0)).toBe(true);
   });
 
-  test("returns false when player is below 66 points", () => {
+  test("returns true when player is below 66 points", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD - 1, DECLARE_THRESHOLD + 14];
     state.canDeclareWindow = 0;
 
-    expect(canDeclare66(state, 0)).toBe(false);
+    expect(canDeclare66(state, 0)).toBe(true);
   });
 
-  test("returns true when player two meets the threshold", () => {
+  test("returns true when player two can declare below the threshold", () => {
     const state = makeState([[], []]);
-    state.roundScores = [10, DECLARE_THRESHOLD];
+    state.roundScores = [10, DECLARE_THRESHOLD - 1];
     state.canDeclareWindow = 1;
 
     expect(canDeclare66(state, 1)).toBe(true);
@@ -1463,16 +1535,16 @@ describe("playTrick", () => {
       { suit: "hearts", rank: "9" },
     );
 
-    expect(nextState.playerHands[0]).toEqual([{ suit: "clubs", rank: "9" }]);
-    expect(nextState.playerHands[1]).toEqual([]);
-    expect(nextState.wonTricks[0]).toEqual([
+    expect(nextState.game.playerHands[0]).toEqual([{ suit: "clubs", rank: "9" }]);
+    expect(nextState.game.playerHands[1]).toEqual([]);
+    expect(nextState.game.wonTricks[0]).toEqual([
       { suit: "hearts", rank: "A" },
       { suit: "hearts", rank: "9" },
     ]);
-    expect(nextState.wonTricks[1]).toEqual([]);
-    expect(nextState.roundScores).toEqual([11, 0]);
-    expect(nextState.canDeclareWindow).toBe(0);
-    expect(nextState.lastCompletedTrick).toEqual({
+    expect(nextState.game.wonTricks[1]).toEqual([]);
+    expect(nextState.game.roundScores).toEqual([11, 0]);
+    expect(nextState.game.canDeclareWindow).toBe(0);
+    expect(nextState.game.lastCompletedTrick).toEqual({
       leaderIndex: 0,
       leaderCard: { suit: "hearts", rank: "A" },
       followerCard: { suit: "hearts", rank: "9" },
@@ -1507,17 +1579,17 @@ describe("playTrick", () => {
       { suit: "spades", rank: "9" },
     );
 
-    expect(nextState.playerHands[0]).toEqual([]);
-    expect(nextState.playerHands[1]).toEqual([]);
-    expect(nextState.wonTricks[0]).toEqual([
+    expect(nextState.game.playerHands[0]).toEqual([]);
+    expect(nextState.game.playerHands[1]).toEqual([]);
+    expect(nextState.game.wonTricks[0]).toEqual([
       { suit: "clubs", rank: "K" },
       { suit: "hearts", rank: "10" },
       { suit: "spades", rank: "9" },
     ]);
-    expect(nextState.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
-    expect(nextState.roundScores).toEqual([20, 5]);
-    expect(nextState.canDeclareWindow).toBe(0);
-    expect(nextState.lastCompletedTrick).toEqual({
+    expect(nextState.game.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
+    expect(nextState.game.roundScores).toEqual([20, 5]);
+    expect(nextState.game.canDeclareWindow).toBe(0);
+    expect(nextState.game.lastCompletedTrick).toEqual({
       leaderIndex: 1,
       leaderCard: { suit: "hearts", rank: "10" },
       followerCard: { suit: "spades", rank: "9" },
