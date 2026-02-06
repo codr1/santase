@@ -145,7 +145,7 @@ describe("canCloseDeck", () => {
       trumpCard: { suit: "hearts", rank: "9" },
     };
 
-    expect(canCloseDeck(testState)).toBe(true);
+    expect(canCloseDeck(testState, 0)).toBe(true);
   });
 
   test("returns false when stock has fewer than 3 cards", () => {
@@ -156,7 +156,7 @@ describe("canCloseDeck", () => {
       isClosed: false,
     };
 
-    expect(canCloseDeck(testState)).toBe(false);
+    expect(canCloseDeck(testState, 0)).toBe(false);
   });
 
   test("returns false when the deck is already closed", () => {
@@ -167,7 +167,7 @@ describe("canCloseDeck", () => {
       isClosed: true,
     };
 
-    expect(canCloseDeck(testState)).toBe(false);
+    expect(canCloseDeck(testState, 0)).toBe(false);
   });
 
   test("returns false when the trump card is null", () => {
@@ -178,7 +178,7 @@ describe("canCloseDeck", () => {
       trumpCard: null,
     };
 
-    expect(canCloseDeck(testState)).toBe(false);
+    expect(canCloseDeck(testState, 0)).toBe(false);
   });
 
   test("returns false when the round already ended", () => {
@@ -195,7 +195,35 @@ describe("canCloseDeck", () => {
       },
     };
 
-    expect(canCloseDeck(testState)).toBe(false);
+    expect(canCloseDeck(testState, 0)).toBe(false);
+  });
+
+  test("returns false when a trick is in progress", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+      currentTrick: {
+        leaderIndex: 0,
+        leaderCard: { suit: "clubs", rank: "A" },
+      },
+    };
+
+    expect(canCloseDeck(testState, 0)).toBe(false);
+  });
+
+  test("returns false when the player is not the leader", () => {
+    const baseState = makeState([[], []], [], { leader: 1 });
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+    };
+
+    expect(canCloseDeck(testState, 0)).toBe(false);
   });
 });
 
@@ -217,7 +245,7 @@ describe("closeDeck", () => {
   });
 
   test("sets closedBy to the closing player", () => {
-    const baseState = makeState([[], []]);
+    const baseState = makeState([[], []], [], { leader: 1 });
     const testState: GameState = {
       ...baseState,
       stock: createDeck().slice(0, 3),
@@ -286,6 +314,38 @@ describe("closeDeck", () => {
     };
 
     expect(() => closeDeck(testState, 0)).toThrow("Round already ended.");
+  });
+
+  test("throws when the current trick is in progress", () => {
+    const baseState = makeState([[], []]);
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+      currentTrick: {
+        leaderIndex: 0,
+        leaderCard: { suit: "clubs", rank: "A" },
+      },
+    };
+
+    expect(() => closeDeck(testState, 0)).toThrow(
+      "Cannot close the deck during a trick.",
+    );
+  });
+
+  test("throws when the player is not the trick leader", () => {
+    const baseState = makeState([[], []], [], { leader: 1 });
+    const testState: GameState = {
+      ...baseState,
+      stock: createDeck().slice(0, 3),
+      isClosed: false,
+      trumpCard: { suit: "hearts", rank: "9" },
+    };
+
+    expect(() => closeDeck(testState, 0)).toThrow(
+      "Only the trick leader can close the deck.",
+    );
   });
 
   test("marks deck as closed for isDeckClosedOrExhausted", () => {

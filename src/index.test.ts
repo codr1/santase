@@ -65,6 +65,15 @@ const postExchangeTrump = async (roomCode: string, asHost: boolean) => {
   );
 };
 
+const postCloseDeck = async (roomCode: string, asHost: boolean) => {
+  const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
+  return handleRequest(
+    new Request(`http://example/rooms/${roomCode}/close-deck${hostQuery}`, {
+      method: "POST",
+    }),
+  );
+};
+
 describe("resolvePort", () => {
   test("defaults to 3000 when env var is missing", () => {
     expect(resolvePort(undefined)).toBe(3000);
@@ -390,6 +399,134 @@ describe("exchange trump endpoint", () => {
       expect(response.status).toBe(409);
       expect(room.matchState.game.trumpCard).toEqual({ suit: "hearts", rank: "A" });
       expect(room.matchState.game.playerHands[0]).toEqual([trumpNine]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
+describe("close deck endpoint", () => {
+  test("closes the deck when allowed", async () => {
+    const game = buildGameState({
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, true);
+      expect(response.status).toBe(200);
+      expect(room.matchState.game.isClosed).toBe(true);
+      expect(room.matchState.game.closedBy).toBe(0);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a close attempt from the non-leader", async () => {
+    const game = buildGameState({
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, false);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.isClosed).toBe(false);
+      expect(room.matchState.game.closedBy).toBeNull();
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a close attempt during an active trick", async () => {
+    const leaderCard: Card = { suit: "hearts", rank: "A" };
+    const game = buildGameState({
+      playerHands: [[leaderCard], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+      currentTrick: { leaderIndex: 0, leaderCard },
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, true);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: "Cannot close the deck during a trick.",
+      });
+      expect(room.matchState.game.isClosed).toBe(false);
+      expect(room.matchState.game.closedBy).toBeNull();
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a close attempt when the stock is too small", async () => {
+    const game = buildGameState({
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.isClosed).toBe(false);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a close attempt when the deck is already closed", async () => {
+    const game = buildGameState({
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+      isClosed: true,
+      closedBy: 0,
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.isClosed).toBe(true);
+      expect(room.matchState.game.closedBy).toBe(0);
     } finally {
       deleteRoom(room.code);
     }

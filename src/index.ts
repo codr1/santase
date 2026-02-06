@@ -11,8 +11,10 @@ import {
   CARD_POINTS,
   calculateGamePoints,
   canDeclareMarriage,
+  canCloseDeck,
   canExchangeTrump9,
   compareTrick,
+  closeDeck,
   declareMarriage,
   drawFromStock,
   exchangeTrump9,
@@ -213,6 +215,47 @@ export async function handleRequest(request: Request): Promise<Response> {
         return jsonError("Trump 9 exchange not allowed.", 409);
       }
       const nextGame = exchangeTrump9(game, playerIndex);
+      room.matchState = { ...room.matchState, game: nextGame };
+      touchRoom(normalizedCode);
+      broadcastGameState(normalizedCode, room.matchState);
+      return jsonResponse({ ok: true }, 200);
+    }
+
+    const closeDeckMatch = path.match(/^\/rooms\/([^/]+)\/close-deck$/);
+    if (closeDeckMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(closeDeckMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return jsonError(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      const playerIndex = resolveViewerIndex(request, room);
+      const game = room.matchState.game;
+      if (isMatchOver(room.matchState)) {
+        return jsonError("Match already ended.", 409);
+      }
+      if (game.roundResult) {
+        return jsonError("Round already ended.", 409);
+      }
+      if (game.leader !== playerIndex) {
+        return jsonError("Only the trick leader can close the deck.", 409);
+      }
+      if (!canCloseDeck(game, playerIndex)) {
+        if (game.currentTrick) {
+          return jsonError("Cannot close the deck during a trick.", 409);
+        }
+        if (game.stock.length < 3) {
+          return jsonError("Stock must have at least 3 cards to close the deck.", 409);
+        }
+        if (game.isClosed) {
+          return jsonError("Deck is already closed.", 409);
+        }
+        if (game.trumpCard === null) {
+          return jsonError("Trump card is not available to close the deck.", 409);
+        }
+        return jsonError("Cannot close the deck.", 409);
+      }
+      const nextGame = closeDeck(game, playerIndex);
       room.matchState = { ...room.matchState, game: nextGame };
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);
