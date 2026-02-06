@@ -1,4 +1,4 @@
-import { initializeMatch, type MatchState } from "./game";
+import { initializeMatch, isMatchOver, type MatchState } from "./game";
 
 const ROOM_CODE_MIN_LENGTH = 4;
 const ROOM_CODE_MAX_LENGTH = 6;
@@ -15,6 +15,11 @@ export type Room = {
   hostConnected: boolean;
   guestConnected: boolean;
   guestEverJoined: boolean;
+  hostReady: boolean;
+  guestReady: boolean;
+  disconnectTimeout: ReturnType<typeof setTimeout> | null;
+  disconnectPendingRole: "host" | "guest" | null;
+  forfeit: boolean;
   lastActivity: number;
   createdAt: number;
   matchState: MatchState;
@@ -65,6 +70,11 @@ export function createRoom(): Room {
         hostConnected: false,
         guestConnected: false,
         guestEverJoined: false,
+        hostReady: false,
+        guestReady: false,
+        disconnectTimeout: null,
+        disconnectPendingRole: null,
+        forfeit: false,
         lastActivity: now,
         createdAt: now,
         matchState,
@@ -143,11 +153,34 @@ export function startRoomCleanup(): void {
   }, ROOM_CLEANUP_INTERVAL_MS);
 }
 
-function removeRoom(code: string, reason: RoomDeleteReason, now = Date.now()): boolean {
-  const removed = rooms.delete(code);
-  if (!removed) {
+export function forfeitMatch(room: Room, winnerIndex: 0 | 1): boolean {
+  if (isMatchOver(room.matchState)) {
     return false;
   }
+  const [scoreA, scoreB] = room.matchState.matchScores;
+  const nextScores: [number, number] = [scoreA, scoreB];
+  nextScores[winnerIndex] = Math.max(11, nextScores[winnerIndex]);
+  room.matchState = {
+    ...room.matchState,
+    matchScores: nextScores,
+  };
+  room.forfeit = true;
+  room.hostReady = false;
+  room.guestReady = false;
+  return true;
+}
+
+function removeRoom(code: string, reason: RoomDeleteReason, now = Date.now()): boolean {
+  const room = rooms.get(code);
+  if (!room) {
+    return false;
+  }
+  if (room.disconnectTimeout) {
+    clearTimeout(room.disconnectTimeout);
+    room.disconnectTimeout = null;
+    room.disconnectPendingRole = null;
+  }
+  rooms.delete(code);
   expiredRooms.set(code, { expiredAt: now, reason });
   console.log(`Room deleted (${reason}): ${code}`);
   return true;

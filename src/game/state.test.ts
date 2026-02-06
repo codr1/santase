@@ -535,7 +535,7 @@ describe("startNewRound", () => {
 
     expect(nextState.dealerIndex).toBe(0);
     expect(nextState.leaderIndex).toBe(1);
-    expect(nextState.matchScores).toEqual([4, 9]);
+    expect(nextState.matchScores).toEqual([4, 7]);
     expectFreshRoundState(nextState);
   });
 
@@ -546,7 +546,7 @@ describe("startNewRound", () => {
 
     expect(nextState.dealerIndex).toBe(1);
     expect(nextState.leaderIndex).toBe(0);
-    expect(nextState.matchScores).toEqual([7, 7]);
+    expect(nextState.matchScores).toEqual([4, 7]);
     expectFreshRoundState(nextState);
   });
 
@@ -577,6 +577,7 @@ describe("startNewRound", () => {
 
     const secondFinishedState = {
       ...afterFirstReset,
+      matchScores: [6, 8],
       game: {
         ...afterFirstReset.game,
         roundResult: {

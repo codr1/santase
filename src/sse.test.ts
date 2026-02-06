@@ -87,7 +87,9 @@ describe("SSE status broadcasting", () => {
 
     const initialEvents = await readEvents(hostReader, 1);
     const initialStatus = initialEvents.find((event) => event.event === "status");
-    expect(initialStatus?.data).toBe("<span>Waiting for opponent...</span>");
+    expect(initialStatus?.data).toBe(
+      '<span data-host-connected="true" data-guest-connected="false">Waiting for opponent...</span>',
+    );
 
     const guestAbort = new AbortController();
     const guestRequest = new Request(`http://example/rooms/${room.code}`, {
@@ -104,12 +106,16 @@ describe("SSE status broadcasting", () => {
     expect(connectedEvent?.data).toBe("guest");
     expect(gameStartAfterGuest?.data).toBe(`/rooms/${room.code}/game`);
     expect(gameStateAfterGuest?.data).toBe(JSON.stringify(room.matchState));
-    expect(statusAfterGuest?.data).toBe("<span>Opponent connected</span>");
+    expect(statusAfterGuest?.data).toBe(
+      '<span data-host-connected="true" data-guest-connected="true">Opponent connected</span>',
+    );
 
     guestAbort.abort();
     const guestDisconnectEvents = await readEvents(hostReader, 1);
     const statusAfterGuestLeft = guestDisconnectEvents.find((event) => event.event === "status");
-    expect(statusAfterGuestLeft?.data).toBe("<span>Waiting for opponent...</span>");
+    expect(statusAfterGuestLeft?.data).toBe(
+      '<span data-host-connected="true" data-guest-connected="false">Waiting for opponent...</span>',
+    );
 
     hostAbort.abort();
     deleteRoom(room.code);

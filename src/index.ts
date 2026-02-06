@@ -4,8 +4,9 @@ import { renderHomePage } from "./templates/home";
 import { renderJoinPage } from "./templates/join";
 import { renderLobbyPage } from "./templates/lobby";
 import { renderGamePage } from "./templates/game";
+import { renderResultsPage } from "./templates/results";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
-import { broadcastGameState, handleSse } from "./sse";
+import { broadcastGameState, broadcastReadyState, handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
 import {
   CARD_POINTS,
@@ -20,6 +21,7 @@ import {
   exchangeTrump9,
   getValidFollowerCards,
   isMatchOver,
+  startNewRound,
   type Card,
   type Rank,
   type Suit,
@@ -224,6 +226,9 @@ export async function handleRequest(request: Request): Promise<Response> {
     const closeDeckMatch = path.match(/^\/rooms\/([^/]+)\/close-deck$/);
     if (closeDeckMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(closeDeckMatch[1]));
+    const readyMatch = path.match(/^\/rooms\/([^/]+)\/ready$/);
+    if (readyMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(readyMatch[1]));
       const resolution = resolveRoom(normalizedCode);
       if ("error" in resolution) {
         return jsonError(resolution.error, resolution.status);
@@ -257,6 +262,51 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       const nextGame = closeDeck(game, playerIndex);
       room.matchState = { ...room.matchState, game: nextGame };
+      if (!game.roundResult) {
+        return jsonError("Round has not ended.", 409);
+      }
+
+      if (playerIndex === room.hostPlayerIndex) {
+        room.hostReady = true;
+      } else {
+        room.guestReady = true;
+      }
+
+      if (room.hostReady && room.guestReady) {
+        room.matchState = startNewRound(room.matchState, game.roundResult.winner);
+        room.hostReady = false;
+        room.guestReady = false;
+        touchRoom(normalizedCode);
+        broadcastGameState(normalizedCode, room.matchState);
+      } else {
+        touchRoom(normalizedCode);
+        broadcastReadyState(normalizedCode, room.hostReady, room.guestReady);
+      }
+
+      return jsonResponse({ ok: true }, 200);
+    }
+
+    const nextRoundMatch = path.match(/^\/rooms\/([^/]+)\/next-round$/);
+    if (nextRoundMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(nextRoundMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return jsonError(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      // Intentionally ungated: clients call this after their round-end timer expires, and
+      // there is no per-player auth beyond the host token used elsewhere.
+      if (isMatchOver(room.matchState)) {
+        return jsonError("Match already ended.", 409);
+      }
+      const game = room.matchState.game;
+      if (!game.roundResult) {
+        return jsonResponse({ ok: true }, 200);
+      }
+
+      room.matchState = startNewRound(room.matchState, game.roundResult.winner);
+      room.hostReady = false;
+      room.guestReady = false;
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);
       return jsonResponse({ ok: true }, 200);
@@ -521,6 +571,34 @@ export async function handleRequest(request: Request): Promise<Response> {
           matchState: resolution.room.matchState,
           viewerIndex,
           hostToken: viewerIndex === resolution.room.hostPlayerIndex ? resolution.room.hostToken : undefined,
+        }),
+      );
+    }
+
+    const resultsMatch = path.match(/^\/rooms\/([^/]+)\/results$/);
+    if (resultsMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(resultsMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return htmlResponse(
+          renderJoinPage({ error: resolution.error, code: normalizedCode }),
+          resolution.status,
+        );
+      }
+      touchRoom(normalizedCode);
+      if (!isMatchOver(resolution.room.matchState)) {
+        return Response.redirect(
+          `/rooms/${encodeURIComponent(resolution.room.code)}/game`,
+          303,
+        );
+      }
+      const viewerIndex = resolveViewerIndex(request, resolution.room);
+      return htmlResponse(
+        renderResultsPage({
+          code: resolution.room.code,
+          matchState: resolution.room.matchState,
+          viewerIndex,
+          forfeit: resolution.room.forfeit,
         }),
       );
     }
