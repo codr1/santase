@@ -164,6 +164,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
   const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
   const safeSseUrl = escapeHtml(sseUrl);
+  const resultsUrl = `/rooms/${encodeURIComponent(code)}/results`;
+  const safeResultsUrl = escapeHtml(resultsUrl);
   const viewerState: ViewerMatchState = getViewerMatchState(matchState, viewerIndex);
   const {
     game: {
@@ -491,8 +493,12 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           </p>
           <div class="mt-4 text-sm text-emerald-100/90" data-match-complete hidden>
             <p>Match complete. Thanks for playing!</p>
-            <a href="/" class="mt-3 inline-flex text-sm font-semibold text-emerald-100 underline">
-              Back to home
+            <a
+              href="${safeResultsUrl}"
+              class="mt-3 inline-flex text-sm font-semibold text-emerald-100 underline"
+              data-results-link
+            >
+              View results now
             </a>
           </div>
         </div>
@@ -544,6 +550,8 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let roundEndCountdownId = null;
       let roundEndCountdownValue = roundEndCountdownStart;
       let roundEndCountdownPaused = false;
+      const matchCompleteRedirectDelayMs = 3000;
+      let matchCompleteRedirectTimeoutId = null;
       let opponentConnected = true;
       const opponentLabel = "Opponent";
       let declareRequestPending = false;
@@ -575,6 +583,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const opponentReadyEl = document.querySelector("[data-opponent-ready]");
       const roundEndActionsEl = document.querySelector("[data-round-end-actions]");
       const matchCompleteEl = document.querySelector("[data-match-complete]");
+      const resultsLink = document.querySelector("[data-results-link]");
       const actionNoticeEl = document.querySelector("[data-action-notice]");
       const graceCountdownEl = document.querySelector("[data-grace-countdown]");
       const actionNoticeAutoDismissMs = 4000;
@@ -679,6 +688,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           window.clearInterval(roundEndCountdownId);
           roundEndCountdownId = null;
         }
+        if (matchCompleteRedirectTimeoutId !== null) {
+          window.clearTimeout(matchCompleteRedirectTimeoutId);
+          matchCompleteRedirectTimeoutId = null;
+        }
         sseProcessingEnabled = false;
         disconnectSse();
       };
@@ -691,6 +704,13 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         cleanupBeforeRedirect();
         window.location.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
       };
+
+      if (resultsLink) {
+        resultsLink.addEventListener("click", (event) => {
+          event.preventDefault();
+          redirectToResults();
+        });
+      }
 
       const getMatchWinnerIndex = (state) => {
         if (!state?.matchScores) {
@@ -882,23 +902,31 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             opponentReadyEl.hidden = true;
           }
           stopRoundEndCountdown();
+        } else if (matchCompleteRedirectTimeoutId !== null) {
+          window.clearTimeout(matchCompleteRedirectTimeoutId);
+          matchCompleteRedirectTimeoutId = null;
         }
       };
 
       const showRoundEndModal = (state) => {
         stopGraceCountdown();
-        if (isMatchOver(state)) {
-          redirectToResults();
-          return;
-        }
         if (!roundEndModal) {
           return;
+        }
+        if (matchCompleteRedirectTimeoutId !== null) {
+          window.clearTimeout(matchCompleteRedirectTimeoutId);
+          matchCompleteRedirectTimeoutId = null;
         }
         resetRoundEndModal();
         updateRoundEndModal(state);
         applyMatchCompleteState(state);
         roundEndModal.removeAttribute("hidden");
-        if (!isMatchOver(state)) {
+        if (isMatchOver(state)) {
+          matchCompleteRedirectTimeoutId = window.setTimeout(() => {
+            matchCompleteRedirectTimeoutId = null;
+            redirectToResults();
+          }, matchCompleteRedirectDelayMs);
+        } else {
           if (opponentConnected) {
             startRoundEndCountdown();
           } else {
@@ -918,6 +946,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         roundEndModal.setAttribute("hidden", "");
         stopGraceCountdown();
         stopRoundEndCountdown();
+        if (matchCompleteRedirectTimeoutId !== null) {
+          window.clearTimeout(matchCompleteRedirectTimeoutId);
+          matchCompleteRedirectTimeoutId = null;
+        }
         resetRoundEndModal(true);
         if (matchCompleteEl) {
           matchCompleteEl.hidden = true;
@@ -2133,16 +2165,18 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (roundEndModal) {
           const hasRoundResult = Boolean(parsedState.game.roundResult);
           const isHidden = roundEndModal.hasAttribute("hidden");
-          if (hasRoundResult && isMatchOver(parsedState)) {
-            redirectToResults();
-            return;
-          }
           if (hasRoundResult) {
             if (isHidden) {
               showRoundEndModal(parsedState);
             } else {
               updateRoundEndModal(parsedState);
               applyMatchCompleteState(parsedState);
+              if (isMatchOver(parsedState) && matchCompleteRedirectTimeoutId === null) {
+                matchCompleteRedirectTimeoutId = window.setTimeout(() => {
+                  matchCompleteRedirectTimeoutId = null;
+                  redirectToResults();
+                }, matchCompleteRedirectDelayMs);
+              }
             }
           } else if (!hasRoundResult && !isHidden) {
             hideRoundEndModal();
