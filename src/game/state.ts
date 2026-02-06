@@ -157,19 +157,6 @@ export function initializeMatch(): MatchState {
   return startMatch();
 }
 
-export function applyRoundResult(
-  matchState: MatchState,
-  winnerIndex: 0 | 1,
-  points: 1 | 2 | 3,
-): MatchState {
-  const nextScores: [number, number] = [...matchState.matchScores];
-  nextScores[winnerIndex] += points;
-  return {
-    ...matchState,
-    matchScores: nextScores,
-  };
-}
-
 export function isMatchOver(matchState: MatchState): boolean {
   return matchState.matchScores[0] >= 11 || matchState.matchScores[1] >= 11;
 }

@@ -19,7 +19,6 @@ import {
   exchangeTrump9,
   findDeclareableMarriages,
   getViewerMatchState,
-  applyRoundResult,
   getMatchWinner,
   isMatchOver,
   getValidFollowerCards,
@@ -472,17 +471,6 @@ describe("initializeMatch", () => {
     expect(firstMatch.matchScores).not.toBe(secondMatch.matchScores);
     expect(firstMatch.matchScores).toEqual([0, 0]);
     expect(secondMatch.matchScores).toEqual([0, 0]);
-  });
-});
-
-describe("applyRoundResult", () => {
-  test("increments the winner's match score", () => {
-    const matchState = initializeMatch();
-
-    const nextState = applyRoundResult(matchState, 1, 2);
-
-    expect(nextState.matchScores).toEqual([0, 2]);
-    expect(matchState.matchScores).toEqual([0, 0]);
   });
 });
 

@@ -428,7 +428,6 @@ type MatchState = {
 - `startMatch()`: Creates a new match with shuffled deck, random dealer, and initial game state
 - `startNewRound(matchState, roundWinnerIndex)`: Preserves current match scores, rotates dealer to loser, sets leader to winner, and deals fresh hands; throws if round hasn't ended or winner doesn't match result. Match scores are applied at play time (in the play endpoint), not during round transition
 - `initializeMatch()`: Alias for `startMatch()`
-- `applyRoundResult(matchState, winnerIndex, points)`: Returns new MatchState with winner's score incremented
 - `isMatchOver(matchState)`: Returns true when either player has ≥11 points
 - `getMatchWinner(matchState)`: Returns winning player index (0 or 1) or null if match not over; throws if tied at ≥11
 - `getViewerMatchState(matchState, viewerIndex)`: Returns a `ViewerMatchState` with the opponent's hand replaced by `{count}`, stock replaced by `{count}`, the opponent's round score replaced by NaN, and `declare66GracePeriodMs` included
