@@ -9,7 +9,7 @@ import {
   getViewerMatchState,
 } from "../game";
 import type { Card, Suit } from "../game/cards";
-import type { MatchState } from "../game/state";
+import type { MatchState, ViewerMatchState } from "../game/state";
 
 type GameOptions = {
   code: string;
@@ -139,11 +139,17 @@ function renderTrickSlot(role: "leader" | "follower", card?: Card | null): strin
   </div>`;
 }
 
-function getActivePlayerIndex(game: MatchState["game"]): 0 | 1 {
+function getActivePlayerIndex(
+  game: Pick<MatchState["game"], "currentTrick" | "leader">,
+): 0 | 1 {
   if (game.currentTrick) {
     return game.currentTrick.leaderIndex === 0 ? 1 : 0;
   }
   return game.leader;
+}
+
+function countCards(cards: Card[] | { count: number }): number {
+  return Array.isArray(cards) ? cards.length : cards.count;
 }
 
 export function renderGamePage({ code, matchState, viewerIndex, hostToken }: GameOptions): string {
@@ -151,7 +157,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
   const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
   const safeSseUrl = escapeHtml(sseUrl);
-  const viewerState = getViewerMatchState(matchState, viewerIndex);
+  const viewerState: ViewerMatchState = getViewerMatchState(matchState, viewerIndex);
   const {
     game: {
       playerHands,
@@ -166,7 +172,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const playerIndex = viewerIndex;
   const opponentIndex = playerIndex === 0 ? 1 : 0;
   const playerHand = playerHands[playerIndex];
-  const opponentHandCount = playerHands[opponentIndex].length;
+  const opponentHandCount = countCards(playerHands[opponentIndex]);
+  if (!Array.isArray(playerHand)) {
+    throw new Error("Viewer hand must be visible as an array.");
+  }
   const playerWonCards = wonTricks[playerIndex].length;
   const opponentWonCards = wonTricks[opponentIndex].length;
   const playerWonTricks = Math.floor(playerWonCards / 2);
@@ -186,11 +195,11 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const trumpCardMarkup = trumpCard
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
     : renderEmptyCardSlot("inset");
-  const stockCount = stock.length;
+  const stockCount = stock.count;
   const stockPileMarkup = renderStockPile(stockCount);
-  const canExchangeTrump = canExchangeTrump9(viewerState.game, playerIndex);
-  const canCloseDeck = canCloseDeckCheck(viewerState.game, playerIndex);
-  const canDeclare = canDeclare66(viewerState.game, playerIndex);
+  const canExchangeTrump = canExchangeTrump9(matchState.game, playerIndex);
+  const canCloseDeck = canCloseDeckCheck(matchState.game, playerIndex);
+  const canDeclare = canDeclare66(matchState.game, playerIndex);
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -1043,6 +1052,20 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         return game.leader;
       };
+      const getHandCount = (hand) => {
+        if (Array.isArray(hand)) {
+          return hand.length;
+        }
+        const count = Number(hand?.count);
+        return Number.isFinite(count) && count >= 0 ? count : 0;
+      };
+      const getStockCount = (stock) => {
+        if (Array.isArray(stock)) {
+          return stock.length;
+        }
+        const count = Number(stock?.count);
+        return Number.isFinite(count) && count >= 0 ? count : 0;
+      };
       const getDisplayTrick = (game) => game?.currentTrick ?? game?.lastCompletedTrick ?? null;
       const isPlayerTurn = (state, playerIndex) =>
         getActivePlayerIndex(state?.game) === playerIndex;
@@ -1060,10 +1083,13 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!game.trumpCard) {
           return false;
         }
-        if (!Array.isArray(game.stock) || game.stock.length <= 2) {
+        if (getStockCount(game.stock) <= 2) {
           return false;
         }
         const hand = game.playerHands?.[playerIndex] ?? [];
+        if (!Array.isArray(hand)) {
+          return false;
+        }
         return hand.some((card) => card.rank === "9" && card.suit === game.trumpSuit);
       };
       const canCloseDeckState = (state, playerIndex) => {
@@ -1080,7 +1106,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (game.leader !== playerIndex) {
           return false;
         }
-        if (!Array.isArray(game.stock) || game.stock.length < 3) {
+        if (getStockCount(game.stock) < 3) {
           return false;
         }
         if (game.isClosed) {
@@ -1663,7 +1689,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       }
       const stockPile = document.querySelector("[data-stock-pile]");
       if (stockPile) {
-        stockPile.dataset.stockCount = String(initialState.game.stock.length);
+        stockPile.dataset.stockCount = String(getStockCount(initialState.game.stock));
       }
       const playerWonPile = document.querySelector("[data-player-won-pile]");
       if (playerWonPile) {
@@ -1985,17 +2011,18 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
 
         if (
           !currentGame ||
-          currentGame.playerHands[opponentIndex].length !== nextGame.playerHands[opponentIndex].length
+          getHandCount(currentGame.playerHands[opponentIndex]) !==
+            getHandCount(nextGame.playerHands[opponentIndex])
         ) {
-          updateOpponentHand(nextGame.playerHands[opponentIndex].length);
+          updateOpponentHand(getHandCount(nextGame.playerHands[opponentIndex]));
         }
 
         if (!currentGame || !areCardsEqual(currentGame.trumpCard, nextGame.trumpCard)) {
           updateTrumpCard(nextGame.trumpCard);
         }
 
-        if (!currentGame || currentGame.stock.length !== nextGame.stock.length) {
-          updateStockPile(nextGame.stock.length);
+        if (!currentGame || getStockCount(currentGame.stock) !== getStockCount(nextGame.stock)) {
+          updateStockPile(getStockCount(nextGame.stock));
         }
 
         if (

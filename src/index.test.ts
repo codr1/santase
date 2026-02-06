@@ -4,6 +4,72 @@ import { createRoom, deleteRoom } from "./rooms";
 import type { Card, GameState } from "./game";
 
 const HOST_TOKEN = "host-token";
+const decoder = new TextDecoder();
+
+type SseEvent = {
+  event: string;
+  data: string;
+};
+
+function parseSseEvents(buffer: string): { events: SseEvent[]; remainder: string } {
+  const blocks = buffer.split("\n\n");
+  const remainder = blocks.pop() ?? "";
+  const events: SseEvent[] = [];
+
+  for (const block of blocks) {
+    if (!block || block.startsWith(":")) {
+      continue;
+    }
+    let eventName = "";
+    const dataLines: string[] = [];
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event: ")) {
+        eventName = line.slice("event: ".length);
+      } else if (line.startsWith("data: ")) {
+        dataLines.push(line.slice("data: ".length));
+      }
+    }
+    if (eventName) {
+      events.push({ event: eventName, data: dataLines.join("\n") });
+    }
+  }
+
+  return { events, remainder };
+}
+
+async function readSseEvents(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  count: number,
+  timeoutMs = 1000,
+): Promise<SseEvent[]> {
+  const deadline = Date.now() + timeoutMs;
+  const events: SseEvent[] = [];
+  let buffer = "";
+
+  while (events.length < count) {
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for ${count} SSE events`);
+    }
+
+    const { value, done } = await Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Timed out reading SSE data")), timeoutMs);
+      }),
+    ]);
+
+    if (done || !value) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const parsed = parseSseEvents(buffer);
+    buffer = parsed.remainder;
+    events.push(...parsed.events);
+  }
+
+  return events.slice(0, count);
+}
 
 const buildGameState = (overrides: Partial<GameState> = {}): GameState => {
   const baseState: GameState = {
@@ -747,6 +813,69 @@ describe("ready endpoint", () => {
       expect(room.matchState.matchScores).toEqual([3, 0]);
       expect(room.matchState.game.roundResult).toBeNull();
     } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
+describe("SSE payloads", () => {
+  test("sends game-state with opponent hand and stock as count objects", async () => {
+    const game = buildGameState({
+      playerHands: [
+        [
+          { suit: "hearts", rank: "A" },
+          { suit: "clubs", rank: "K" },
+        ],
+        [
+          { suit: "spades", rank: "9" },
+          { suit: "diamonds", rank: "10" },
+          { suit: "hearts", rank: "Q" },
+        ],
+      ],
+      stock: [
+        { suit: "clubs", rank: "A" },
+        { suit: "spades", rank: "J" },
+      ],
+      leader: 0,
+    });
+    const room = createTestRoom(game, 0);
+
+    const hostAbort = new AbortController();
+    const guestAbort = new AbortController();
+
+    try {
+      const hostResponse = await handleRequest(
+        new Request(`http://example/sse/${room.code}?hostToken=${encodeURIComponent(HOST_TOKEN)}`, {
+          signal: hostAbort.signal,
+        }),
+      );
+      expect(hostResponse.status).toBe(200);
+      const hostReader = hostResponse.body?.getReader();
+      if (!hostReader) {
+        throw new Error("Expected host SSE stream reader");
+      }
+      await readSseEvents(hostReader, 1);
+
+      const guestResponse = await handleRequest(
+        new Request(`http://example/sse/${room.code}`, { signal: guestAbort.signal }),
+      );
+      expect(guestResponse.status).toBe(200);
+
+      const hostEvents = await readSseEvents(hostReader, 4);
+      const gameStateEvent = hostEvents.find((event) => event.event === "game-state");
+      expect(gameStateEvent).toBeDefined();
+      const payload = JSON.parse(gameStateEvent?.data ?? "{}");
+
+      expect(payload.game.playerHands[0]).toEqual(game.playerHands[0]);
+      expect(payload.game.playerHands[1]).toEqual({ count: game.playerHands[1].length });
+      expect(payload.game.stock).toEqual({ count: game.stock.length });
+      expect(payload.game.roundScores[0]).toBe(game.roundScores[0]);
+      expect(payload.game.roundScores[1]).toBeNull();
+      expect(Array.isArray(payload.game.playerHands[1])).toBe(false);
+      expect(Array.isArray(payload.game.stock)).toBe(false);
+    } finally {
+      hostAbort.abort();
+      guestAbort.abort();
       deleteRoom(room.code);
     }
   });

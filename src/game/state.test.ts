@@ -17,6 +17,7 @@ import {
   drawFromStock,
   exchangeTrump9,
   findDeclareableMarriages,
+  getViewerMatchState,
   applyRoundResult,
   getMatchWinner,
   isMatchOver,
@@ -31,6 +32,7 @@ import {
   startMatch,
   startNewRound,
   type GameState,
+  type MatchState,
 } from "./state";
 
 describe("dealInitialHands", () => {
@@ -98,6 +100,73 @@ describe("dealInitialHands", () => {
     const state = dealInitialHands(deck, 1);
 
     expect(state.leader).toBe(0);
+  });
+});
+
+describe("getViewerMatchState", () => {
+  const buildMatchState = (): MatchState => ({
+    game: {
+      playerHands: [
+        [
+          { suit: "hearts", rank: "A" },
+          { suit: "clubs", rank: "K" },
+        ],
+        [
+          { suit: "spades", rank: "9" },
+          { suit: "diamonds", rank: "10" },
+          { suit: "hearts", rank: "Q" },
+        ],
+      ],
+      stock: [
+        { suit: "clubs", rank: "A" },
+        { suit: "spades", rank: "J" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+      isClosed: false,
+      leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
+      closedBy: null,
+      wonTricks: [[], []],
+      roundScores: [12, 8],
+      declaredMarriages: [],
+      canDeclareWindow: null,
+      roundResult: null,
+    },
+    matchScores: [2, 3],
+    dealerIndex: 0,
+    leaderIndex: 1,
+  });
+
+  test("hides opponent hand cards and stock cards behind counts", () => {
+    const matchState = buildMatchState();
+
+    const viewerState = getViewerMatchState(matchState, 0);
+
+    expect(viewerState.game.playerHands[0]).toEqual(matchState.game.playerHands[0]);
+    expect(viewerState.game.playerHands[1]).toEqual({
+      count: matchState.game.playerHands[1].length,
+    });
+    expect(viewerState.game.stock).toEqual({ count: matchState.game.stock.length });
+    expect(Array.isArray(viewerState.game.playerHands[1])).toBe(false);
+    expect(Array.isArray(viewerState.game.stock)).toBe(false);
+    expect(Number.isNaN(viewerState.game.roundScores[1])).toBe(true);
+  });
+
+  test("keeps player 1 hand visible and hides player 0 hand for viewer 1", () => {
+    const matchState = buildMatchState();
+
+    const viewerState = getViewerMatchState(matchState, 1);
+
+    expect(viewerState.game.playerHands[1]).toEqual(matchState.game.playerHands[1]);
+    expect(viewerState.game.playerHands[0]).toEqual({
+      count: matchState.game.playerHands[0].length,
+    });
+    expect(viewerState.game.stock).toEqual({ count: matchState.game.stock.length });
+    expect(Array.isArray(viewerState.game.playerHands[0])).toBe(false);
+    expect(Array.isArray(viewerState.game.stock)).toBe(false);
+    expect(Number.isNaN(viewerState.game.roundScores[0])).toBe(true);
   });
 });
 

@@ -56,14 +56,40 @@ export type MatchState = {
   leaderIndex: 0 | 1;
 };
 
-export function getViewerMatchState(matchState: MatchState, viewerIndex: 0 | 1): MatchState {
+export type HiddenCards = {
+  count: number;
+};
+
+export type ViewerGameState = Omit<GameState, "playerHands" | "stock"> & {
+  playerHands: [Card[] | HiddenCards, Card[] | HiddenCards];
+  stock: HiddenCards;
+};
+
+export type ViewerMatchState = Omit<MatchState, "game"> & {
+  game: ViewerGameState;
+};
+
+export function getViewerMatchState(
+  matchState: MatchState,
+  viewerIndex: 0 | 1,
+): ViewerMatchState {
   const opponentIndex = viewerIndex === 0 ? 1 : 0;
   const roundScores: [number, number] = [...matchState.game.roundScores];
   roundScores[opponentIndex] = Number.NaN;
+  const playerHands: [Card[] | HiddenCards, Card[] | HiddenCards] = [
+    matchState.game.playerHands[0],
+    matchState.game.playerHands[1],
+  ];
+  playerHands[opponentIndex] = {
+    count: matchState.game.playerHands[opponentIndex].length,
+  };
+
   return {
     ...matchState,
     game: {
       ...matchState.game,
+      playerHands,
+      stock: { count: matchState.game.stock.length },
       roundScores,
     },
   };
