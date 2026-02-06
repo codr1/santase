@@ -9,20 +9,17 @@ import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, ty
 import { broadcastGameState, broadcastReadyState, handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
 import {
-  CARD_POINTS,
   calculateGamePoints,
   canDeclare66,
   canDeclareMarriage,
   canCloseDeck,
   canExchangeTrump9,
-  compareTrick,
   closeDeck,
   declare66,
   declareMarriage,
-  drawFromStock,
   exchangeTrump9,
-  getValidFollowerCards,
   isMatchOver,
+  playTrick,
   startNewRound,
   type Card,
   type Rank,
@@ -434,6 +431,12 @@ export async function handleRequest(request: Request): Promise<Response> {
           }
           updatedGame = declareMarriage(updatedGame, playerIndex, marriageSuit);
         }
+        if (!marriageSuit && updatedGame.canDeclareWindow !== null) {
+          updatedGame = {
+            ...updatedGame,
+            canDeclareWindow: null,
+          };
+        }
 
         const leaderHand = updatedGame.playerHands[playerIndex];
         const { nextHand, removed } = removeCardFromHand(leaderHand, card);
@@ -446,7 +449,6 @@ export async function handleRequest(request: Request): Promise<Response> {
           ...updatedGame,
           playerHands: nextHands,
           currentTrick: { leaderIndex: game.leader, leaderCard: card },
-          canDeclareWindow: marriageSuit ? playerIndex : null,
         };
         room.matchState = { ...room.matchState, game: nextGame };
         touchRoom(normalizedCode);
@@ -454,72 +456,23 @@ export async function handleRequest(request: Request): Promise<Response> {
         return jsonResponse({ ok: true }, 200);
       }
 
-      const followerIndex: 0 | 1 = currentTrick.leaderIndex === 0 ? 1 : 0;
       if (marriageSuit) {
         return jsonError("Marriage declarations are only allowed when leading.", 400);
       }
 
-      const followerHand = game.playerHands[playerIndex];
-      if (game.isClosed || game.stock.length === 0) {
-        const validFollowerCards = getValidFollowerCards(
-          followerHand,
+      let trickResult;
+      try {
+        trickResult = playTrick(
+          game,
+          currentTrick.leaderIndex,
           currentTrick.leaderCard,
-          game.trumpSuit,
-          true,
+          card,
         );
-        const isValidFollowerCard = validFollowerCards.some(
-          (candidate) => candidate.suit === card.suit && candidate.rank === card.rank,
-        );
-        if (!isValidFollowerCard) {
-          return jsonError("Invalid follower card.", 400);
-        }
+      } catch (error) {
+        return jsonError(error instanceof Error ? error.message : "Invalid follower card.", 400);
       }
-      const { nextHand, removed } = removeCardFromHand(followerHand, card);
-      if (!removed) {
-        return jsonError("Card not found in hand.", 400);
-      }
-
-      const nextHands: [Card[], Card[]] =
-        playerIndex === 0 ? [nextHand, game.playerHands[1]] : [game.playerHands[0], nextHand];
-      const winnerOffset = compareTrick(
-        currentTrick.leaderCard,
-        card,
-        currentTrick.leaderCard.suit,
-        game.trumpSuit,
-      );
-      const winnerIndex: 0 | 1 = winnerOffset === 0 ? currentTrick.leaderIndex : followerIndex;
-      const trickPoints = CARD_POINTS[currentTrick.leaderCard.rank] + CARD_POINTS[card.rank];
-      const nextWonTricks: [Card[], Card[]] = [
-        [...game.wonTricks[0]],
-        [...game.wonTricks[1]],
-      ];
-      nextWonTricks[winnerIndex] = [
-        ...nextWonTricks[winnerIndex],
-        currentTrick.leaderCard,
-        card,
-      ];
-      const nextRoundScores: [number, number] = [
-        game.roundScores[0],
-        game.roundScores[1],
-      ];
-      nextRoundScores[winnerIndex] += trickPoints;
-
-      let nextGame = {
-        ...game,
-        playerHands: nextHands,
-        leader: winnerIndex,
-        wonTricks: nextWonTricks,
-        roundScores: nextRoundScores,
-        currentTrick: null,
-        lastCompletedTrick: {
-          leaderIndex: currentTrick.leaderIndex,
-          leaderCard: currentTrick.leaderCard,
-          followerCard: card,
-        },
-        canDeclareWindow: winnerIndex,
-      };
-
-      nextGame = drawFromStock(nextGame, winnerIndex);
+      const winnerIndex = trickResult.winnerIndex;
+      let nextGame = trickResult.game;
       room.lastTrickCompletedAt = Date.now();
 
       let nextMatchState = { ...room.matchState, game: nextGame };

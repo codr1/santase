@@ -1532,16 +1532,16 @@ describe("playTrick", () => {
       { suit: "hearts", rank: "9" },
     );
 
-    expect(nextState.playerHands[0]).toEqual([{ suit: "clubs", rank: "9" }]);
-    expect(nextState.playerHands[1]).toEqual([]);
-    expect(nextState.wonTricks[0]).toEqual([
+    expect(nextState.game.playerHands[0]).toEqual([{ suit: "clubs", rank: "9" }]);
+    expect(nextState.game.playerHands[1]).toEqual([]);
+    expect(nextState.game.wonTricks[0]).toEqual([
       { suit: "hearts", rank: "A" },
       { suit: "hearts", rank: "9" },
     ]);
-    expect(nextState.wonTricks[1]).toEqual([]);
-    expect(nextState.roundScores).toEqual([11, 0]);
-    expect(nextState.canDeclareWindow).toBe(0);
-    expect(nextState.lastCompletedTrick).toEqual({
+    expect(nextState.game.wonTricks[1]).toEqual([]);
+    expect(nextState.game.roundScores).toEqual([11, 0]);
+    expect(nextState.game.canDeclareWindow).toBe(0);
+    expect(nextState.game.lastCompletedTrick).toEqual({
       leaderIndex: 0,
       leaderCard: { suit: "hearts", rank: "A" },
       followerCard: { suit: "hearts", rank: "9" },
@@ -1576,17 +1576,17 @@ describe("playTrick", () => {
       { suit: "spades", rank: "9" },
     );
 
-    expect(nextState.playerHands[0]).toEqual([]);
-    expect(nextState.playerHands[1]).toEqual([]);
-    expect(nextState.wonTricks[0]).toEqual([
+    expect(nextState.game.playerHands[0]).toEqual([]);
+    expect(nextState.game.playerHands[1]).toEqual([]);
+    expect(nextState.game.wonTricks[0]).toEqual([
       { suit: "clubs", rank: "K" },
       { suit: "hearts", rank: "10" },
       { suit: "spades", rank: "9" },
     ]);
-    expect(nextState.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
-    expect(nextState.roundScores).toEqual([20, 5]);
-    expect(nextState.canDeclareWindow).toBe(0);
-    expect(nextState.lastCompletedTrick).toEqual({
+    expect(nextState.game.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
+    expect(nextState.game.roundScores).toEqual([20, 5]);
+    expect(nextState.game.canDeclareWindow).toBe(0);
+    expect(nextState.game.lastCompletedTrick).toEqual({
       leaderIndex: 1,
       leaderCard: { suit: "hearts", rank: "10" },
       followerCard: { suit: "spades", rank: "9" },
