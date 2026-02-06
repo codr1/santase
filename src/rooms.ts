@@ -15,6 +15,8 @@ export type Room = {
   hostConnected: boolean;
   guestConnected: boolean;
   guestEverJoined: boolean;
+  hostReady: boolean;
+  guestReady: boolean;
   lastActivity: number;
   createdAt: number;
   matchState: MatchState;
@@ -65,6 +67,8 @@ export function createRoom(): Room {
         hostConnected: false,
         guestConnected: false,
         guestEverJoined: false,
+        hostReady: false,
+        guestReady: false,
         lastActivity: now,
         createdAt: now,
         matchState,

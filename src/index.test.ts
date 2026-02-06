@@ -69,6 +69,19 @@ const postCloseDeck = async (roomCode: string, asHost: boolean) => {
   const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
   return handleRequest(
     new Request(`http://example/rooms/${roomCode}/close-deck${hostQuery}`, {
+const postReady = async (roomCode: string, asHost: boolean) => {
+  const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
+  return handleRequest(
+    new Request(`http://example/rooms/${roomCode}/ready${hostQuery}`, {
+      method: "POST",
+    }),
+  );
+};
+
+const postNextRound = async (roomCode: string, asHost: boolean) => {
+  const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
+  return handleRequest(
+    new Request(`http://example/rooms/${roomCode}/next-round${hostQuery}`, {
       method: "POST",
     }),
   );
@@ -417,6 +430,24 @@ describe("close deck endpoint", () => {
       ],
       trumpCard: { suit: "hearts", rank: "9" },
       trumpSuit: "hearts",
+describe("ready endpoint", () => {
+  test("rejects readiness while round is still active", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postReady(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.hostReady).toBe(false);
+      expect(room.guestReady).toBe(false);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("marks the caller as ready when the round has ended", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
     });
     const room = createTestRoom(game, 0);
 
@@ -425,6 +456,11 @@ describe("close deck endpoint", () => {
       expect(response.status).toBe(200);
       expect(room.matchState.game.isClosed).toBe(true);
       expect(room.matchState.game.closedBy).toBe(0);
+      const response = await postReady(room.code, true);
+      expect(response.status).toBe(200);
+      expect(room.hostReady).toBe(true);
+      expect(room.guestReady).toBe(false);
+      expect(room.matchState.game.roundResult?.winner).toBe(0);
     } finally {
       deleteRoom(room.code);
     }
@@ -449,6 +485,43 @@ describe("close deck endpoint", () => {
       expect(response.status).toBe(409);
       expect(room.matchState.game.isClosed).toBe(false);
       expect(room.matchState.game.closedBy).toBeNull();
+  test("starts a new round when both players are ready", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [2, 0];
+
+    try {
+      const hostResponse = await postReady(room.code, true);
+      expect(hostResponse.status).toBe(200);
+
+      const guestResponse = await postReady(room.code, false);
+      expect(guestResponse.status).toBe(200);
+
+      expect(room.hostReady).toBe(false);
+      expect(room.guestReady).toBe(false);
+      expect(room.matchState.matchScores).toEqual([2, 0]);
+      expect(room.matchState.game.roundResult).toBeNull();
+      expect(room.matchState.game.playerHands[0]).toHaveLength(6);
+      expect(room.matchState.game.playerHands[1]).toHaveLength(6);
+      expect(room.matchState.dealerIndex).toBe(1);
+      expect(room.matchState.leaderIndex).toBe(0);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects readiness when the match is already over", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [11, 5];
+
+    try {
+      const response = await postReady(room.code, true);
+      expect(response.status).toBe(409);
     } finally {
       deleteRoom(room.code);
     }
@@ -467,6 +540,16 @@ describe("close deck endpoint", () => {
       trumpCard: { suit: "hearts", rank: "9" },
       trumpSuit: "hearts",
       currentTrick: { leaderIndex: 0, leaderCard },
+  test("does not double count points when advancing after a play-ended round", async () => {
+    const leaderCard: Card = { suit: "hearts", rank: "A" };
+    const followerCard: Card = { suit: "hearts", rank: "10" };
+    const game = buildGameState({
+      playerHands: [[], [followerCard]],
+      leader: 0,
+      currentTrick: { leaderIndex: 0, leaderCard },
+      stock: [],
+      trumpCard: null,
+      trumpSuit: "spades",
     });
     const room = createTestRoom(game, 0);
 
@@ -479,6 +562,37 @@ describe("close deck endpoint", () => {
       });
       expect(room.matchState.game.isClosed).toBe(false);
       expect(room.matchState.game.closedBy).toBeNull();
+      const playResponse = await postPlay(room.code, { card: followerCard }, false);
+      expect(playResponse.status).toBe(200);
+      expect(room.matchState.matchScores).toEqual([3, 0]);
+
+      const hostResponse = await postReady(room.code, true);
+      expect(hostResponse.status).toBe(200);
+
+      const guestResponse = await postReady(room.code, false);
+      expect(guestResponse.status).toBe(200);
+
+      expect(room.matchState.matchScores).toEqual([3, 0]);
+      expect(room.matchState.game.roundResult).toBeNull();
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
+describe("next round endpoint", () => {
+  test("returns ok with no changes when the round has already started", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 0);
+    room.hostReady = true;
+    room.guestReady = true;
+
+    try {
+      const response = await postNextRound(room.code, false);
+      expect(response.status).toBe(200);
+      expect(room.hostReady).toBe(true);
+      expect(room.guestReady).toBe(true);
+      expect(room.matchState.game.roundResult).toBeNull();
     } finally {
       deleteRoom(room.code);
     }
@@ -501,6 +615,24 @@ describe("close deck endpoint", () => {
       const response = await postCloseDeck(room.code, true);
       expect(response.status).toBe(409);
       expect(room.matchState.game.isClosed).toBe(false);
+  test("starts a new round when the previous round ended", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 1, gamePoints: 1, reason: "declared_66" },
+    });
+    const room = createTestRoom(game, 0);
+    room.hostReady = true;
+    room.guestReady = true;
+    room.matchState.matchScores = [3, 5];
+
+    try {
+      const response = await postNextRound(room.code, true);
+      expect(response.status).toBe(200);
+      expect(room.hostReady).toBe(false);
+      expect(room.guestReady).toBe(false);
+      expect(room.matchState.matchScores).toEqual([3, 5]);
+      expect(room.matchState.game.roundResult).toBeNull();
+      expect(room.matchState.game.playerHands[0]).toHaveLength(6);
+      expect(room.matchState.game.playerHands[1]).toHaveLength(6);
     } finally {
       deleteRoom(room.code);
     }
@@ -527,6 +659,16 @@ describe("close deck endpoint", () => {
       expect(response.status).toBe(409);
       expect(room.matchState.game.isClosed).toBe(true);
       expect(room.matchState.game.closedBy).toBe(0);
+  test("rejects next-round when the match is over", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [11, 5];
+
+    try {
+      const response = await postNextRound(room.code, false);
+      expect(response.status).toBe(409);
     } finally {
       deleteRoom(room.code);
     }

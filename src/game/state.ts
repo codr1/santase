@@ -89,7 +89,6 @@ export function startNewRound(
     matchState.matchScores[0],
     matchState.matchScores[1],
   ];
-  nextMatchScores[roundWinnerIndex] += roundResult.gamePoints;
 
   const dealerIndex = roundWinnerIndex === 0 ? 1 : 0;
   const leaderIndex = roundWinnerIndex;

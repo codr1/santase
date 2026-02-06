@@ -65,6 +65,14 @@ export function broadcastGameState(roomCode: string, matchState: MatchState): vo
   broadcast(roomCode, "game-state", JSON.stringify(matchState));
 }
 
+export function broadcastReadyState(
+  roomCode: string,
+  hostReady: boolean,
+  guestReady: boolean,
+): void {
+  broadcast(roomCode, "ready-state", JSON.stringify({ hostReady, guestReady }));
+}
+
 function sendHeartbeat(roomCode: string, client: SseClient): void {
   try {
     client.controller.enqueue(encodeComment("ping"));
