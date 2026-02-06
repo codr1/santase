@@ -522,10 +522,31 @@ describe("declare 66 endpoint", () => {
     }
   });
 
-  test("rejects a declaration when the player cannot declare", async () => {
+  test("applies false-declaration penalty when score is below 66", async () => {
     const game = buildGameState({
       roundScores: [65, 0],
       canDeclareWindow: 0,
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postDeclare66(room.code, true);
+      expect(response.status).toBe(200);
+      expect(room.matchState.game.roundResult).toEqual({
+        winner: 1,
+        gamePoints: 2,
+        reason: "false_declaration",
+      });
+      expect(room.matchState.matchScores).toEqual([0, 2]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a declaration when the player cannot declare", async () => {
+    const game = buildGameState({
+      roundScores: [65, 0],
+      canDeclareWindow: null,
     });
     const room = createTestRoom(game, 0);
 

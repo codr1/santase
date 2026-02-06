@@ -292,10 +292,7 @@ export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
   if (state.roundResult) {
     return false;
   }
-  return (
-    state.canDeclareWindow === playerIndex &&
-    state.roundScores[playerIndex] >= DECLARE_THRESHOLD
-  );
+  return state.canDeclareWindow === playerIndex;
 }
 
 export function declare66(state: GameState, playerIndex: 0 | 1): GameState {

@@ -684,17 +684,17 @@ describe("canDeclare66", () => {
     expect(canDeclare66(state, 0)).toBe(true);
   });
 
-  test("returns false when player is below 66 points", () => {
+  test("returns true when player is below 66 points", () => {
     const state = makeState([[], []]);
     state.roundScores = [DECLARE_THRESHOLD - 1, DECLARE_THRESHOLD + 14];
     state.canDeclareWindow = 0;
 
-    expect(canDeclare66(state, 0)).toBe(false);
+    expect(canDeclare66(state, 0)).toBe(true);
   });
 
-  test("returns true when player two meets the threshold", () => {
+  test("returns true when player two can declare below the threshold", () => {
     const state = makeState([[], []]);
-    state.roundScores = [10, DECLARE_THRESHOLD];
+    state.roundScores = [10, DECLARE_THRESHOLD - 1];
     state.canDeclareWindow = 1;
 
     expect(canDeclare66(state, 1)).toBe(true);

@@ -2,7 +2,6 @@ import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import { getCardBackUrl, getCardImageUrl } from "./cards";
 import {
-  DECLARE_THRESHOLD,
   canCloseDeck as canCloseDeckCheck,
   canDeclare66,
   canExchangeTrump9,
@@ -513,7 +512,6 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const trickResolutionDelayMs = 1000;
       const trickResolutionDuration = 0.6;
       const roundEndCountdownStart = 10;
-      const declareThreshold = ${DECLARE_THRESHOLD};
       let animationsSettled = true;
       let activeAnimations = 0;
       let playRequestPending = false;
@@ -1119,10 +1117,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         if (!game || game.roundResult) {
           return false;
         }
-        return (
-          game.canDeclareWindow === playerIndex &&
-          (game.roundScores?.[playerIndex] ?? 0) >= declareThreshold
-        );
+        return game.canDeclareWindow === playerIndex;
       };
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
