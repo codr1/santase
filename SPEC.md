@@ -324,6 +324,7 @@ type GameState = {
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
+  canDeclareWindow: (0 | 1) | null;
   roundResult: RoundResult | null;
 };
 
@@ -341,6 +342,10 @@ type RoundResult = {
 - `closeDeck(state, playerIndex)`: Sets `isClosed` to true and `closedBy` to the closing player; delegates to `canCloseDeck` for validation and throws specific errors (trick in progress, not leader, stock too small, already closed, no trump card)
 - `canDeclare66(state, playerIndex)`: Returns true if player has ≥66 points and round hasn't ended
 - `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 3 game points
+- `canCloseDeck(state)`: Returns true when stock has 3+ cards, deck is not already closed, trump card exists, and round hasn't ended
+- `closeDeck(state, playerIndex)`: Sets `isClosed` to true and `closedBy` to the closing player; throws when conditions not met
+- `canDeclare66(state, playerIndex)`: Returns true if player has ≥66 points, round hasn't ended, and the declaration window is open for that player
+- `declare66(state, playerIndex)`: Returns new GameState with roundResult set; awards declaring player if they have ≥66 points, otherwise opponent wins with 2 game points
 - `calculateGamePoints(opponentScore)`: Returns game points based on opponent score: 3 if 0, 2 if 1-32, 1 if ≥33
 - `calculateWinPoints(state, closerIndex?)`: Returns win points for the round; if closer loses, returns 3 (penalty); otherwise uses calculateGamePoints
 - `canExchangeTrump9(state, playerIndex)`: Returns true when no trick is in progress, player is leader, stock has 3+ cards, trump card is available, and player holds trump 9

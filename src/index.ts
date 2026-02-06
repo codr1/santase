@@ -11,11 +11,13 @@ import { escapeHtml } from "./utils/html";
 import {
   CARD_POINTS,
   calculateGamePoints,
+  canDeclare66,
   canDeclareMarriage,
   canCloseDeck,
   canExchangeTrump9,
   compareTrick,
   closeDeck,
+  declare66,
   declareMarriage,
   drawFromStock,
   exchangeTrump9,
@@ -28,6 +30,7 @@ import {
 } from "./game";
 
 const DEFAULT_PORT = 3000;
+const DECLARE_66_GRACE_PERIOD_MS = 2600;
 const PUBLIC_ROOT = normalize(decodeURIComponent(new URL("../public", import.meta.url).pathname));
 
 export function resolvePort(envPort: string | undefined): number {
@@ -226,9 +229,6 @@ export async function handleRequest(request: Request): Promise<Response> {
     const closeDeckMatch = path.match(/^\/rooms\/([^/]+)\/close-deck$/);
     if (closeDeckMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(closeDeckMatch[1]));
-    const readyMatch = path.match(/^\/rooms\/([^/]+)\/ready$/);
-    if (readyMatch) {
-      const normalizedCode = normalizeRoomCode(decodeURIComponent(readyMatch[1]));
       const resolution = resolveRoom(normalizedCode);
       if ("error" in resolution) {
         return jsonError(resolution.error, resolution.status);
@@ -262,6 +262,64 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       const nextGame = closeDeck(game, playerIndex);
       room.matchState = { ...room.matchState, game: nextGame };
+      touchRoom(normalizedCode);
+      broadcastGameState(normalizedCode, room.matchState);
+      return jsonResponse({ ok: true }, 200);
+    }
+
+    const declareMatch = path.match(/^\/rooms\/([^/]+)\/declare-66$/);
+    if (declareMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(declareMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return jsonError(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      const playerIndex = resolveViewerIndex(request, room);
+      const game = room.matchState.game;
+      if (isMatchOver(room.matchState)) {
+        return jsonError("Match already ended.", 409);
+      }
+      if (game.roundResult) {
+        return jsonError("Round already ended.", 409);
+      }
+      if (!canDeclare66(game, playerIndex)) {
+        return jsonError("Declare 66 is not available right now.", 409);
+      }
+      const nextGame = declare66(game, playerIndex);
+      const roundResult = nextGame.roundResult;
+      if (!roundResult) {
+        return jsonError("Round result missing after declaration.", 500);
+      }
+      const nextScores: [number, number] = [
+        room.matchState.matchScores[0],
+        room.matchState.matchScores[1],
+      ];
+      nextScores[roundResult.winner] += roundResult.gamePoints;
+      room.matchState = {
+        ...room.matchState,
+        game: nextGame,
+        matchScores: nextScores,
+      };
+      room.lastTrickCompletedAt = null;
+      touchRoom(normalizedCode);
+      broadcastGameState(normalizedCode, room.matchState);
+      return jsonResponse({ ok: true }, 200);
+    }
+
+    const readyMatch = path.match(/^\/rooms\/([^/]+)\/ready$/);
+    if (readyMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(readyMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return jsonError(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      const playerIndex = resolveViewerIndex(request, room);
+      const game = room.matchState.game;
+      if (isMatchOver(room.matchState)) {
+        return jsonError("Match already ended.", 409);
+      }
       if (!game.roundResult) {
         return jsonError("Round has not ended.", 409);
       }
@@ -358,6 +416,14 @@ export async function handleRequest(request: Request): Promise<Response> {
         return jsonError("Not your turn to play.", 409);
       }
       if (!currentTrick) {
+        const lastCompletedAt = room.lastTrickCompletedAt;
+        if (
+          playerIndex === game.leader &&
+          lastCompletedAt !== null &&
+          Date.now() - lastCompletedAt < DECLARE_66_GRACE_PERIOD_MS
+        ) {
+          return jsonError("Please wait before playing.", 409);
+        }
         let updatedGame = game;
         if (marriageSuit) {
           if (card.suit !== marriageSuit || (card.rank !== "K" && card.rank !== "Q")) {
@@ -380,6 +446,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           ...updatedGame,
           playerHands: nextHands,
           currentTrick: { leaderIndex: game.leader, leaderCard: card },
+          canDeclareWindow: marriageSuit ? playerIndex : null,
         };
         room.matchState = { ...room.matchState, game: nextGame };
         touchRoom(normalizedCode);
@@ -449,9 +516,11 @@ export async function handleRequest(request: Request): Promise<Response> {
           leaderCard: currentTrick.leaderCard,
           followerCard: card,
         },
+        canDeclareWindow: winnerIndex,
       };
 
       nextGame = drawFromStock(nextGame, winnerIndex);
+      room.lastTrickCompletedAt = Date.now();
 
       let nextMatchState = { ...room.matchState, game: nextGame };
       if (
@@ -495,6 +564,9 @@ export async function handleRequest(request: Request): Promise<Response> {
         }
       }
 
+      if (nextMatchState.game.roundResult) {
+        room.lastTrickCompletedAt = null;
+      }
       room.matchState = nextMatchState;
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);

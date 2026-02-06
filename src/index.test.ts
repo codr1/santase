@@ -19,6 +19,7 @@ const buildGameState = (overrides: Partial<GameState> = {}): GameState => {
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
+    canDeclareWindow: null,
     roundResult: null,
   };
 
@@ -65,10 +66,24 @@ const postExchangeTrump = async (roomCode: string, asHost: boolean) => {
   );
 };
 
+const postDeclare66 = async (roomCode: string, asHost: boolean) => {
+  const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
+  return handleRequest(
+    new Request(`http://example/rooms/${roomCode}/declare-66${hostQuery}`, {
+      method: "POST",
+    }),
+  );
+};
+
 const postCloseDeck = async (roomCode: string, asHost: boolean) => {
   const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
   return handleRequest(
     new Request(`http://example/rooms/${roomCode}/close-deck${hostQuery}`, {
+      method: "POST",
+    }),
+  );
+};
+
 const postReady = async (roomCode: string, asHost: boolean) => {
   const hostQuery = asHost ? `?hostToken=${encodeURIComponent(HOST_TOKEN)}` : "";
   return handleRequest(
@@ -89,7 +104,6 @@ const postNextRound = async (roomCode: string, asHost: boolean) => {
 
 const getResults = async (roomCode: string) =>
   handleRequest(new Request(`http://example/rooms/${roomCode}/results`));
-
 describe("resolvePort", () => {
   test("defaults to 3000 when env var is missing", () => {
     expect(resolvePort(undefined)).toBe(3000);
@@ -421,6 +435,80 @@ describe("exchange trump endpoint", () => {
   });
 });
 
+describe("declare 66 endpoint", () => {
+  test("declares 66 and updates match scores", async () => {
+    const game = buildGameState({
+      roundScores: [66, 0],
+      canDeclareWindow: 0,
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postDeclare66(room.code, true);
+      expect(response.status).toBe(200);
+
+      const nextGame = room.matchState.game;
+      expect(nextGame.roundResult?.reason).toBe("declared_66");
+      expect(nextGame.roundResult?.winner).toBe(0);
+      expect(room.matchState.matchScores).toEqual([3, 0]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a declaration when the player cannot declare", async () => {
+    const game = buildGameState({
+      roundScores: [65, 0],
+      canDeclareWindow: 0,
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postDeclare66(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.roundResult).toBeNull();
+      expect(room.matchState.matchScores).toEqual([0, 0]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a declaration when the round already ended", async () => {
+    const game = buildGameState({
+      roundScores: [66, 0],
+      canDeclareWindow: 0,
+      roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postDeclare66(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.matchScores).toEqual([0, 0]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a declaration when the match already ended", async () => {
+    const game = buildGameState({
+      roundScores: [66, 0],
+      canDeclareWindow: 0,
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [11, 0];
+
+    try {
+      const response = await postDeclare66(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.matchScores).toEqual([11, 0]);
+      expect(room.matchState.game.roundResult).toBeNull();
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
 describe("close deck endpoint", () => {
   test("closes the deck when allowed", async () => {
     const game = buildGameState({
@@ -433,24 +521,6 @@ describe("close deck endpoint", () => {
       ],
       trumpCard: { suit: "hearts", rank: "9" },
       trumpSuit: "hearts",
-describe("ready endpoint", () => {
-  test("rejects readiness while round is still active", async () => {
-    const game = buildGameState();
-    const room = createTestRoom(game, 0);
-
-    try {
-      const response = await postReady(room.code, true);
-      expect(response.status).toBe(409);
-      expect(room.hostReady).toBe(false);
-      expect(room.guestReady).toBe(false);
-    } finally {
-      deleteRoom(room.code);
-    }
-  });
-
-  test("marks the caller as ready when the round has ended", async () => {
-    const game = buildGameState({
-      roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
     });
     const room = createTestRoom(game, 0);
 
@@ -459,11 +529,6 @@ describe("ready endpoint", () => {
       expect(response.status).toBe(200);
       expect(room.matchState.game.isClosed).toBe(true);
       expect(room.matchState.game.closedBy).toBe(0);
-      const response = await postReady(room.code, true);
-      expect(response.status).toBe(200);
-      expect(room.hostReady).toBe(true);
-      expect(room.guestReady).toBe(false);
-      expect(room.matchState.game.roundResult?.winner).toBe(0);
     } finally {
       deleteRoom(room.code);
     }
@@ -488,6 +553,123 @@ describe("ready endpoint", () => {
       expect(response.status).toBe(409);
       expect(room.matchState.game.isClosed).toBe(false);
       expect(room.matchState.game.closedBy).toBeNull();
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a close attempt during an active trick", async () => {
+    const leaderCard: Card = { suit: "hearts", rank: "A" };
+    const game = buildGameState({
+      playerHands: [[leaderCard], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+      currentTrick: { leaderIndex: 0, leaderCard },
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, true);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: "Cannot close the deck during a trick.",
+      });
+      expect(room.matchState.game.isClosed).toBe(false);
+      expect(room.matchState.game.closedBy).toBeNull();
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a close attempt when the stock is too small", async () => {
+    const game = buildGameState({
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.isClosed).toBe(false);
+      expect(room.matchState.game.closedBy).toBeNull();
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects a close attempt when the deck is already closed", async () => {
+    const game = buildGameState({
+      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
+      leader: 0,
+      stock: [
+        { suit: "diamonds", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+        { suit: "spades", rank: "10" },
+      ],
+      trumpCard: { suit: "hearts", rank: "9" },
+      trumpSuit: "hearts",
+      isClosed: true,
+      closedBy: 0,
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postCloseDeck(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.matchState.game.isClosed).toBe(true);
+      expect(room.matchState.game.closedBy).toBe(0);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
+describe("ready endpoint", () => {
+  test("rejects readiness while round is still active", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postReady(room.code, true);
+      expect(response.status).toBe(409);
+      expect(room.hostReady).toBe(false);
+      expect(room.guestReady).toBe(false);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("marks the caller as ready when the round has ended", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
+    });
+    const room = createTestRoom(game, 0);
+
+    try {
+      const response = await postReady(room.code, true);
+      expect(response.status).toBe(200);
+      expect(room.hostReady).toBe(true);
+      expect(room.guestReady).toBe(false);
+      expect(room.matchState.game.roundResult?.winner).toBe(0);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
   test("starts a new round when both players are ready", async () => {
     const game = buildGameState({
       roundResult: { winner: 0, gamePoints: 2, reason: "exhausted" },
@@ -530,19 +712,6 @@ describe("ready endpoint", () => {
     }
   });
 
-  test("rejects a close attempt during an active trick", async () => {
-    const leaderCard: Card = { suit: "hearts", rank: "A" };
-    const game = buildGameState({
-      playerHands: [[leaderCard], [{ suit: "spades", rank: "K" }]],
-      leader: 0,
-      stock: [
-        { suit: "diamonds", rank: "J" },
-        { suit: "clubs", rank: "Q" },
-        { suit: "spades", rank: "10" },
-      ],
-      trumpCard: { suit: "hearts", rank: "9" },
-      trumpSuit: "hearts",
-      currentTrick: { leaderIndex: 0, leaderCard },
   test("does not double count points when advancing after a play-ended round", async () => {
     const leaderCard: Card = { suit: "hearts", rank: "A" };
     const followerCard: Card = { suit: "hearts", rank: "10" };
@@ -601,23 +770,6 @@ describe("next round endpoint", () => {
     }
   });
 
-  test("rejects a close attempt when the stock is too small", async () => {
-    const game = buildGameState({
-      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
-      leader: 0,
-      stock: [
-        { suit: "diamonds", rank: "J" },
-        { suit: "clubs", rank: "Q" },
-      ],
-      trumpCard: { suit: "hearts", rank: "9" },
-      trumpSuit: "hearts",
-    });
-    const room = createTestRoom(game, 0);
-
-    try {
-      const response = await postCloseDeck(room.code, true);
-      expect(response.status).toBe(409);
-      expect(room.matchState.game.isClosed).toBe(false);
   test("starts a new round when the previous round ended", async () => {
     const game = buildGameState({
       roundResult: { winner: 1, gamePoints: 1, reason: "declared_66" },
@@ -641,27 +793,6 @@ describe("next round endpoint", () => {
     }
   });
 
-  test("rejects a close attempt when the deck is already closed", async () => {
-    const game = buildGameState({
-      playerHands: [[{ suit: "hearts", rank: "A" }], [{ suit: "spades", rank: "K" }]],
-      leader: 0,
-      stock: [
-        { suit: "diamonds", rank: "J" },
-        { suit: "clubs", rank: "Q" },
-        { suit: "spades", rank: "10" },
-      ],
-      trumpCard: { suit: "hearts", rank: "9" },
-      trumpSuit: "hearts",
-      isClosed: true,
-      closedBy: 0,
-    });
-    const room = createTestRoom(game, 0);
-
-    try {
-      const response = await postCloseDeck(room.code, true);
-      expect(response.status).toBe(409);
-      expect(room.matchState.game.isClosed).toBe(true);
-      expect(room.matchState.game.closedBy).toBe(0);
   test("rejects next-round when the match is over", async () => {
     const game = buildGameState({
       roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },

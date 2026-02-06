@@ -45,6 +45,7 @@ export type GameState = {
   wonTricks: [Card[], Card[]];
   roundScores: [number, number];
   declaredMarriages: Suit[];
+  canDeclareWindow: (0 | 1) | null;
   roundResult: RoundResult | null;
 };
 
@@ -54,6 +55,19 @@ export type MatchState = {
   dealerIndex: 0 | 1;
   leaderIndex: 0 | 1;
 };
+
+export function getViewerMatchState(matchState: MatchState, viewerIndex: 0 | 1): MatchState {
+  const opponentIndex = viewerIndex === 0 ? 1 : 0;
+  const roundScores: [number, number] = [...matchState.game.roundScores];
+  roundScores[opponentIndex] = Number.NaN;
+  return {
+    ...matchState,
+    game: {
+      ...matchState.game,
+      roundScores,
+    },
+  };
+}
 
 function randomDealerIndex(): 0 | 1 {
   const values = crypto.getRandomValues(new Uint32Array(1));
@@ -183,6 +197,7 @@ export function dealInitialHands(deck: Card[], dealerIndex: 0 | 1 = 0): GameStat
     wonTricks: [[], []],
     roundScores: [0, 0],
     declaredMarriages: [],
+    canDeclareWindow: null,
     roundResult: null,
   };
 }
@@ -251,7 +266,10 @@ export function canDeclare66(state: GameState, playerIndex: 0 | 1): boolean {
   if (state.roundResult) {
     return false;
   }
-  return state.roundScores[playerIndex] >= DECLARE_THRESHOLD;
+  return (
+    state.canDeclareWindow === playerIndex &&
+    state.roundScores[playerIndex] >= DECLARE_THRESHOLD
+  );
 }
 
 export function declare66(state: GameState, playerIndex: 0 | 1): GameState {
@@ -265,7 +283,7 @@ export function declare66(state: GameState, playerIndex: 0 | 1): GameState {
   if (playerScore < DECLARE_THRESHOLD) {
     const result: RoundResult = {
       winner: opponentIndex,
-      gamePoints: VALAT_GAME_POINTS,
+      gamePoints: SCHNEIDER_GAME_POINTS,
       reason: "false_declaration",
     };
     return {
@@ -394,6 +412,7 @@ export function declareMarriage(
     ...state,
     declaredMarriages: [...state.declaredMarriages, suit],
     roundScores: updatedScores,
+    canDeclareWindow: playerIndex,
   };
 }
 
@@ -498,14 +517,17 @@ export function playTrick(
   ];
   nextRoundScores[winnerIndex] += trickPoints;
 
+  const clearedState = { ...state, canDeclareWindow: null };
+
   return {
-    ...state,
+    ...clearedState,
     playerHands: nextHands,
     leader: nextLeader,
     wonTricks: nextWonTricks,
     roundScores: nextRoundScores,
     currentTrick: null,
     lastCompletedTrick: { leaderIndex, leaderCard, followerCard },
+    canDeclareWindow: winnerIndex,
   };
 }
 

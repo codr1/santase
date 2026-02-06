@@ -1,7 +1,13 @@
 import { renderLayout } from "./layout";
 import { escapeHtml } from "../utils/html";
 import { getCardBackUrl, getCardImageUrl } from "./cards";
-import { canCloseDeck as canCloseDeckCheck, canExchangeTrump9 } from "../game";
+import {
+  DECLARE_THRESHOLD,
+  canCloseDeck as canCloseDeckCheck,
+  canDeclare66,
+  canExchangeTrump9,
+  getViewerMatchState,
+} from "../game";
 import type { Card, Suit } from "../game/cards";
 import type { MatchState } from "../game/state";
 
@@ -145,6 +151,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const tokenQuery = hostToken ? `?hostToken=${encodeURIComponent(hostToken)}` : "";
   const sseUrl = `/sse/${encodeURIComponent(code)}${tokenQuery}`;
   const safeSseUrl = escapeHtml(sseUrl);
+  const viewerState = getViewerMatchState(matchState, viewerIndex);
   const {
     game: {
       playerHands,
@@ -155,7 +162,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       roundScores,
     },
     matchScores,
-  } = matchState;
+  } = viewerState;
   const playerIndex = viewerIndex;
   const opponentIndex = playerIndex === 0 ? 1 : 0;
   const playerHand = playerHands[playerIndex];
@@ -166,23 +173,24 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
   const opponentWonTricks = Math.floor(opponentWonCards / 2);
   const displayTrick:
     | { leaderIndex: 0 | 1; leaderCard: Card; followerCard?: Card }
-    | null = matchState.game.currentTrick ?? matchState.game.lastCompletedTrick ?? null;
+    | null = viewerState.game.currentTrick ?? viewerState.game.lastCompletedTrick ?? null;
   const leaderTrickCard = displayTrick?.leaderCard ?? null;
   const followerTrickCard = displayTrick?.followerCard ?? null;
-  const trickStatusText = matchState.game.currentTrick
+  const trickStatusText = viewerState.game.currentTrick
     ? "Waiting for response"
     : displayTrick
       ? "Last trick complete"
       : "No cards played yet";
-  const isWaitingForTurn = getActivePlayerIndex(matchState.game) !== playerIndex;
+  const isWaitingForTurn = getActivePlayerIndex(viewerState.game) !== playerIndex;
   const suitMeta = SUIT_SYMBOLS[trumpSuit];
   const trumpCardMarkup = trumpCard
     ? renderCardSvg(getCardImageUrl(trumpCard), `${trumpCard.rank} of ${trumpCard.suit}`, "drop-shadow")
     : renderEmptyCardSlot("inset");
   const stockCount = stock.length;
   const stockPileMarkup = renderStockPile(stockCount);
-  const canExchangeTrump = canExchangeTrump9(matchState.game, playerIndex);
-  const canCloseDeck = canCloseDeckCheck(matchState.game, playerIndex);
+  const canExchangeTrump = canExchangeTrump9(viewerState.game, playerIndex);
+  const canCloseDeck = canCloseDeckCheck(viewerState.game, playerIndex);
+  const canDeclare = canDeclare66(viewerState.game, playerIndex);
   const opponentWonPileMarkup =
     opponentWonCards > 0
       ? renderCardSvg(getCardBackUrl(), "Opponent won pile", "opacity-80")
@@ -283,18 +291,18 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                   <span class="font-medium">You</span>
                   <div class="flex items-center gap-4 text-sm">
                     <span class="text-emerald-200/70">Round</span>
-                    <span class="font-semibold" data-player-round-score>${roundScores[playerIndex]}</span>
+                    <span class="font-semibold" data-player-round-score="true">${roundScores[playerIndex]}</span>
                     <span class="text-emerald-200/70">Match</span>
-                    <span class="font-semibold" data-player-match-score>${matchScores[playerIndex]}</span>
+                    <span class="font-semibold" data-player-match-score="true">${matchScores[playerIndex]}</span>
                   </div>
                 </div>
                 <div class="flex items-center justify-between rounded-xl bg-emerald-900/30 px-3 py-2">
                   <span class="font-medium">Opponent</span>
                   <div class="flex items-center gap-4 text-sm">
                     <span class="text-emerald-200/70">Round</span>
-                    <span class="font-semibold" data-opponent-round-score>${roundScores[opponentIndex]}</span>
+                    <span class="font-semibold">?</span>
                     <span class="text-emerald-200/70">Match</span>
-                    <span class="font-semibold" data-opponent-match-score>${matchScores[opponentIndex]}</span>
+                    <span class="font-semibold" data-opponent-match-score="true">${matchScores[opponentIndex]}</span>
                   </div>
                 </div>
               </div>
@@ -332,14 +340,24 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
                 </div>
               </div>
               <div class="mt-4 flex justify-center">
-                <button
-                  type="button"
-                  class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
-                  data-exchange-trump="true"
-                  ${canExchangeTrump ? "" : "hidden"}
-                >
-                  Exchange trump 9
-                </button>
+                <div class="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+                    data-exchange-trump="true"
+                    ${canExchangeTrump ? "" : "hidden"}
+                  >
+                    Exchange trump 9
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-950 shadow-lg shadow-black/20 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-amber-200/60"
+                    data-declare-66="true"
+                    ${canDeclare ? "" : "hidden"}
+                  >
+                    Declare 66
+                  </button>
+                </div>
               </div>
               <div class="mt-3 flex justify-center">
                 <button
@@ -458,7 +476,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const viewerIndex = ${playerIndex};
       const opponentIndex = ${opponentIndex};
       const roomCode = ${JSON.stringify(code)};
-      const initialState = ${JSON.stringify(matchState)};
+      const initialState = ${JSON.stringify(viewerState)};
       const isHost = ${hostToken ? "true" : "false"};
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
@@ -486,6 +504,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       const trickResolutionDelayMs = 1000;
       const trickResolutionDuration = 0.6;
       const roundEndCountdownStart = 10;
+      const declareThreshold = ${DECLARE_THRESHOLD};
       let animationsSettled = true;
       let activeAnimations = 0;
       let playRequestPending = false;
@@ -498,6 +517,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
       let roundEndCountdownPaused = false;
       let opponentConnected = true;
       const opponentLabel = "Opponent";
+      let declareRequestPending = false;
       let pendingTrickResolutionKey = null;
       let latestReadyState = null;
 
@@ -1068,6 +1088,16 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         return game.trumpCard !== null;
       };
+      const canDeclare66State = (state, playerIndex) => {
+        const game = state?.game;
+        if (!game || game.roundResult) {
+          return false;
+        }
+        return (
+          game.canDeclareWindow === playerIndex &&
+          (game.roundScores?.[playerIndex] ?? 0) >= declareThreshold
+        );
+      };
       const areCardsEqual = (left, right) =>
         Boolean(left && right && left.rank === right.rank && left.suit === right.suit);
       const areOptionalCardsEqual = (left, right) => {
@@ -1159,6 +1189,15 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         const canClose = canCloseDeckState(state, viewerIndex);
         button.hidden = !canClose;
         button.disabled = !canClose || closeRequestPending;
+      };
+      const updateDeclare66Button = (state) => {
+        const button = document.querySelector("[data-declare-66]");
+        if (!button) {
+          return;
+        }
+        const canDeclare = canDeclare66State(state, viewerIndex);
+        button.hidden = !canDeclare;
+        button.disabled = !canDeclare || declareRequestPending;
       };
       const animateNewCards = (cards, isWaiting) => {
         if (!window.gsap || cards.length === 0) {
@@ -1589,6 +1628,32 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           cardEl.textContent = String(wonCards);
         }
       };
+      const updateScores = (nextState, previousState) => {
+        const playerRoundEl = document.querySelector("[data-player-round-score]");
+        const playerMatchEl = document.querySelector("[data-player-match-score]");
+        const opponentMatchEl = document.querySelector("[data-opponent-match-score]");
+        if (playerRoundEl) {
+          const nextRound = nextState?.game?.roundScores?.[viewerIndex];
+          const currentRound = previousState?.game?.roundScores?.[viewerIndex];
+          if (typeof nextRound === "number" && nextRound !== currentRound) {
+            playerRoundEl.textContent = String(nextRound);
+          }
+        }
+        if (playerMatchEl) {
+          const nextMatch = nextState?.matchScores?.[viewerIndex];
+          const currentMatch = previousState?.matchScores?.[viewerIndex];
+          if (typeof nextMatch === "number" && nextMatch !== currentMatch) {
+            playerMatchEl.textContent = String(nextMatch);
+          }
+        }
+        if (opponentMatchEl) {
+          const nextMatch = nextState?.matchScores?.[opponentIndex];
+          const currentMatch = previousState?.matchScores?.[opponentIndex];
+          if (typeof nextMatch === "number" && nextMatch !== currentMatch) {
+            opponentMatchEl.textContent = String(nextMatch);
+          }
+        }
+      };
 
       const trumpContainer = document.querySelector("[data-trump-card]");
       if (trumpContainer) {
@@ -1730,6 +1795,37 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
             }
           });
         }
+        const declareButton = document.querySelector("[data-declare-66]");
+        if (declareButton) {
+          declareButton.addEventListener("click", async () => {
+            if (declareRequestPending) {
+              return;
+            }
+            if (!canDeclare66State(currentState, viewerIndex)) {
+              return;
+            }
+            declareRequestPending = true;
+            updateDeclare66Button(currentState);
+            try {
+              const response = await fetch(
+                "/rooms/" + encodeURIComponent(roomCode) + "/declare-66",
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                },
+              );
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                console.warn("Declare 66 rejected", response.status, errorText);
+              }
+            } catch (error) {
+              console.warn("Failed to declare 66", error);
+            } finally {
+              declareRequestPending = false;
+              updateDeclare66Button(currentState);
+            }
+          });
+        }
         if (readyButton) {
           readyButton.addEventListener("click", async () => {
             if (readyRequestPending) {
@@ -1766,6 +1862,7 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
         }
         updateExchangeTrumpButton(currentState);
         updateCloseDeckButton(currentState);
+        updateDeclare66Button(currentState);
         if (currentState?.game?.roundResult) {
           showRoundEndModal(currentState);
         }
@@ -1923,25 +2020,10 @@ export function renderGamePage({ code, matchState, viewerIndex, hostToken }: Gam
           updateWonCounts(opponentIndex, nextCount);
         }
 
+        updateScores(parsedState, currentState);
         updateExchangeTrumpButton(parsedState);
         updateCloseDeckButton(parsedState);
-
-        const playerRoundScore = document.querySelector("[data-player-round-score]");
-        if (playerRoundScore) {
-          playerRoundScore.textContent = String(nextGame.roundScores[viewerIndex]);
-        }
-        const opponentRoundScore = document.querySelector("[data-opponent-round-score]");
-        if (opponentRoundScore) {
-          opponentRoundScore.textContent = String(nextGame.roundScores[opponentIndex]);
-        }
-        const playerMatchScore = document.querySelector("[data-player-match-score]");
-        if (playerMatchScore) {
-          playerMatchScore.textContent = String(parsedState.matchScores[viewerIndex]);
-        }
-        const opponentMatchScore = document.querySelector("[data-opponent-match-score]");
-        if (opponentMatchScore) {
-          opponentMatchScore.textContent = String(parsedState.matchScores[opponentIndex]);
-        }
+        updateDeclare66Button(parsedState);
 
         currentState = parsedState;
         if (roundEndModal) {
