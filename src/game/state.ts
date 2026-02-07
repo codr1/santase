@@ -19,6 +19,7 @@ const SCHNEIDER_THRESHOLD = 33;
 const VALAT_GAME_POINTS = 3;
 const SCHNEIDER_GAME_POINTS = 2;
 const STANDARD_GAME_POINTS = 1;
+const LAST_TRICK_BONUS = 10;
 
 export type RoundResult = {
   winner: 0 | 1;
