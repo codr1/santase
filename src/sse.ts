@@ -155,6 +155,11 @@ function clearDisconnectTimeout(room: Room, role?: ClientRole): void {
   room.disconnectTimeouts = {};
 }
 
+export function clearRoomDisconnectTimeouts(room: Room): void {
+  clearDisconnectTimeout(room, "host");
+  clearDisconnectTimeout(room, "guest");
+}
+
 function startDisconnectTimeout(
   roomCode: string,
   room: Room,

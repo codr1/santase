@@ -3,18 +3,7 @@ const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 
 if (!isBun) {
   const { expect, test } = await import("@playwright/test");
-  const baseUrl = "http://localhost:3001";
-
-  const createRoom = async (page: any): Promise<string> => {
-    await page.goto(baseUrl);
-    await page.getByRole("button", { name: "Create Room" }).click();
-    await expect(page).toHaveURL(/\/rooms\/[A-Z0-9]+\/lobby$/);
-
-    const pathname = new URL(page.url()).pathname;
-    const pathMatch = pathname.match(/^\/rooms\/([A-Z0-9]+)\/lobby$/);
-    expect(pathMatch).not.toBeNull();
-    return pathMatch ? pathMatch[1] : "";
-  };
+  const { createRoom, joinRoom } = await import("./helpers");
 
   const assertRoomCodeShown = async (page: any, roomCode: string): Promise<void> => {
     const roomCodeLocator = page.getByLabel(/Room code/i);
@@ -22,13 +11,6 @@ if (!isBun) {
     const roomCodeText = await roomCodeLocator.textContent();
     const roomCodeFromPage = roomCodeText ? roomCodeText.trim().replace(/\s+/g, "") : "";
     expect(roomCodeFromPage).toBe(roomCode);
-  };
-
-  const joinRoom = async (page: any, roomCode: string): Promise<void> => {
-    await page.goto(`${baseUrl}/join`);
-    await page.getByLabel(/Room Code/i).fill(roomCode);
-    await page.getByRole("button", { name: "Join Room" }).click();
-    await expect(page).toHaveURL(new RegExp(`/rooms/${roomCode}$`));
   };
 
   test("host can create a room", async ({ page }: { page: any }) => {

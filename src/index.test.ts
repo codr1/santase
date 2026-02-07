@@ -168,6 +168,19 @@ const postNextRound = async (roomCode: string, asHost: boolean) => {
   );
 };
 
+const postNewMatch = async (
+  roomCode: string,
+  hostToken: string | undefined = HOST_TOKEN,
+) => {
+  return handleRequest(
+    new Request(`http://example/rooms/${roomCode}/new-match`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(hostToken ? { hostToken } : {}),
+    }),
+  );
+};
+
 const getResults = async (roomCode: string) =>
   handleRequest(new Request(`http://example/rooms/${roomCode}/results`));
 const getGame = async (roomCode: string) =>
@@ -962,6 +975,106 @@ describe("next round endpoint", () => {
   });
 });
 
+describe("new match endpoint", () => {
+  test("resets room and broadcasts a fresh game state after match over", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [11, 4];
+    room.forfeit = true;
+    room.draw = false;
+    room.hostReady = true;
+    room.guestReady = true;
+    room.lastTrickCompletedAt = Date.now();
+    room.disconnectTimeouts.host = setTimeout(() => {}, 60_000);
+    room.disconnectTimeouts.guest = setTimeout(() => {}, 60_000);
+
+    const hostAbort = new AbortController();
+
+    try {
+      const hostSseResponse = await handleRequest(
+        new Request(`http://example/sse/${room.code}?hostToken=${encodeURIComponent(HOST_TOKEN)}`, {
+          signal: hostAbort.signal,
+        }),
+      );
+      expect(hostSseResponse.status).toBe(200);
+      const hostReader = hostSseResponse.body?.getReader();
+      if (!hostReader) {
+        throw new Error("Expected host SSE stream reader");
+      }
+      await readSseEvents(hostReader, 1);
+
+      const response = await postNewMatch(room.code, HOST_TOKEN);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
+
+      expect(room.matchState.matchScores).toEqual([0, 0]);
+      expect(room.matchState.game.roundResult).toBeNull();
+      expect(room.forfeit).toBe(false);
+      expect(room.draw).toBe(false);
+      expect(room.hostReady).toBe(false);
+      expect(room.guestReady).toBe(false);
+      expect(room.lastTrickCompletedAt).toBeNull();
+      expect(room.disconnectTimeouts.host).toBeUndefined();
+      expect(room.disconnectTimeouts.guest).toBeUndefined();
+      expect(room.disconnectTimeouts).toEqual({});
+      expect(room.matchState.game.playerHands[0]).toHaveLength(6);
+      expect(room.matchState.game.playerHands[1]).toHaveLength(6);
+
+      const events = await readSseEvents(hostReader, 1);
+      const gameStateEvent = events.find((event) => event.event === "game-state");
+      expect(gameStateEvent).toBeDefined();
+      const payload = JSON.parse(gameStateEvent?.data ?? "{}") as {
+        draw?: boolean;
+        matchScores?: [number, number];
+      };
+      expect(payload.draw).toBe(false);
+      expect(payload.matchScores).toEqual([0, 0]);
+    } finally {
+      hostAbort.abort();
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects reset when match is not over", async () => {
+    const room = createTestRoom(buildGameState(), 0);
+    room.matchState.matchScores = [10, 5];
+
+    try {
+      const response = await postNewMatch(room.code, HOST_TOKEN);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: "Match is not over.",
+      });
+      expect(room.matchState.matchScores).toEqual([10, 5]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("rejects reset when the caller is not the host", async () => {
+    const game = buildGameState({
+      roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+    });
+    const room = createTestRoom(game, 0);
+    room.matchState.matchScores = [11, 2];
+
+    try {
+      const response = await postNewMatch(room.code, "invalid-host-token");
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        ok: false,
+        error: "Only the host can start a new match.",
+      });
+      expect(room.matchState.matchScores).toEqual([11, 2]);
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
 describe("results endpoint", () => {
   test("renders the results page when the match is over", async () => {
     const game = buildGameState({
@@ -1048,6 +1161,25 @@ describe("game endpoint", () => {
       expect(response.headers.get("location")).toBe(
         `/rooms/${encodeURIComponent(room.code)}/results`,
       );
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("renders game page with initial match-over flag when match is complete", async () => {
+    const room = createTestRoom(
+      buildGameState({
+        roundResult: { winner: 0, gamePoints: 3, reason: "declared_66" },
+      }),
+      0,
+    );
+    room.matchState.matchScores = [11, 4];
+
+    try {
+      const response = await getGame(room.code);
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain("const initialMatchOver = true;");
     } finally {
       deleteRoom(room.code);
     }

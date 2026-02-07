@@ -6,7 +6,7 @@ import { renderLobbyPage } from "./templates/lobby";
 import { renderGamePage } from "./templates/game";
 import { renderResultsPage } from "./templates/results";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
-import { broadcastGameState, broadcastReadyState, handleSse } from "./sse";
+import { broadcastGameState, broadcastReadyState, clearRoomDisconnectTimeouts, handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
 import {
   calculateGamePoints,
@@ -19,6 +19,7 @@ import {
   declare66,
   declareMarriage,
   exchangeTrump9,
+  initializeMatch,
   isMatchOver,
   playTrick,
   startNewRound,
@@ -367,6 +368,40 @@ export async function handleRequest(request: Request): Promise<Response> {
       return jsonResponse({ ok: true }, 200);
     }
 
+    const newMatchMatch = path.match(/^\/rooms\/([^/]+)\/new-match$/);
+    if (newMatchMatch) {
+      const normalizedCode = normalizeRoomCode(decodeURIComponent(newMatchMatch[1]));
+      const resolution = resolveRoom(normalizedCode);
+      if ("error" in resolution) {
+        return jsonError(resolution.error, resolution.status);
+      }
+      const room = resolution.room;
+      let payload: { hostToken?: unknown } | null = null;
+      try {
+        payload = await request.json();
+      } catch {
+        return jsonError("Invalid JSON payload.", 400);
+      }
+      if (typeof payload?.hostToken !== "string" || payload.hostToken !== room.hostToken) {
+        return jsonError("Only the host can start a new match.", 403);
+      }
+      if (!isMatchOver(room.matchState)) {
+        return jsonError("Match is not over.", 409);
+      }
+
+      room.matchState = initializeMatch();
+      room.forfeit = false;
+      room.draw = false;
+      room.hostReady = false;
+      room.guestReady = false;
+      clearRoomDisconnectTimeouts(room);
+      room.lastTrickCompletedAt = null;
+
+      touchRoom(normalizedCode);
+      broadcastGameState(normalizedCode, room.matchState);
+      return jsonResponse({ ok: true }, 200);
+    }
+
     const playMatch = path.match(/^\/rooms\/([^/]+)\/play$/);
     if (playMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(playMatch[1]));
@@ -601,6 +636,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           code: resolution.room.code,
           matchState: resolution.room.matchState,
           viewerIndex,
+          initialMatchOver: isMatchOver(resolution.room.matchState) && !resolution.room.draw,
           hostToken: viewerIndex === resolution.room.hostPlayerIndex ? resolution.room.hostToken : undefined,
         }),
       );
