@@ -1606,60 +1606,82 @@ describe("playTrick", () => {
     });
   });
 
-  test("awards the last trick bonus on final exhaustion trick", () => {
-    const state: GameState = {
-      playerHands: [[{ suit: "clubs", rank: "J" }], [{ suit: "clubs", rank: "Q" }]],
-      stock: [],
-      trumpCard: null,
-      trumpSuit: "spades",
-      isClosed: false,
-      leader: 0,
-      currentTrick: null,
-      lastCompletedTrick: null,
-      closedBy: null,
-      wonTricks: [[], []],
-      roundScores: [0, 0],
-      declaredMarriages: [],
-      canDeclareWindow: null,
-      roundResult: null,
-    };
+  describe("last trick bonus", () => {
+    test("adds 10 points to the winner on the final exhaustion trick", () => {
+      const state = makeTrickState({
+        leaderHand: [{ suit: "hearts", rank: "A" }],
+        followerHand: [{ suit: "hearts", rank: "9" }],
+      });
 
-    const nextState = playTrick(
-      state,
-      0,
-      { suit: "clubs", rank: "J" },
-      { suit: "clubs", rank: "Q" },
-    );
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "9" },
+      );
 
-    expect(nextState.game.roundScores).toEqual([0, 15]);
-  });
+      expect(nextState.game.roundScores).toEqual([21, 0]);
+    });
 
-  test("does not award the last trick bonus for closed deck rounds", () => {
-    const state: GameState = {
-      playerHands: [[{ suit: "clubs", rank: "J" }], [{ suit: "clubs", rank: "Q" }]],
-      stock: [],
-      trumpCard: null,
-      trumpSuit: "spades",
-      isClosed: true,
-      leader: 0,
-      currentTrick: null,
-      lastCompletedTrick: null,
-      closedBy: 0,
-      wonTricks: [[], []],
-      roundScores: [0, 0],
-      declaredMarriages: [],
-      canDeclareWindow: null,
-      roundResult: null,
-    };
+    test("does not add the bonus when the deck is closed", () => {
+      const state: GameState = {
+        ...makeTrickState({
+          leaderHand: [{ suit: "clubs", rank: "J" }],
+          followerHand: [{ suit: "clubs", rank: "Q" }],
+          isClosed: true,
+        }),
+        closedBy: 0,
+      };
 
-    const nextState = playTrick(
-      state,
-      0,
-      { suit: "clubs", rank: "J" },
-      { suit: "clubs", rank: "Q" },
-    );
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "clubs", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+      );
 
-    expect(nextState.game.roundScores).toEqual([0, 5]);
+      expect(nextState.game.roundScores).toEqual([0, 5]);
+    });
+
+    test("adds the bonus on top of card points in a final-trick win", () => {
+      const state: GameState = {
+        ...makeTrickState({
+          leaderHand: [{ suit: "hearts", rank: "A" }],
+          followerHand: [{ suit: "hearts", rank: "10" }],
+        }),
+        roundScores: [49, 50],
+      };
+
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "10" },
+      );
+
+      expect(nextState.game.roundScores).toEqual([80, 50]);
+    });
+
+    test("uses bonus-adjusted scores to determine winner and game points on a 60-60 card tie", () => {
+      const state: GameState = {
+        ...makeTrickState({
+          leaderHand: [{ suit: "hearts", rank: "A" }],
+          followerHand: [{ suit: "hearts", rank: "10" }],
+        }),
+        roundScores: [39, 60],
+      };
+
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "10" },
+      );
+
+      expect(nextState.game.roundScores).toEqual([70, 60]);
+      expect(nextState.winnerIndex).toBe(0);
+      expect(calculateGamePoints(nextState.game.roundScores[1])).toBe(1);
+    });
   });
 
   test("throws when the leader card is not in hand", () => {
