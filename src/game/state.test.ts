@@ -19,7 +19,6 @@ import {
   exchangeTrump9,
   findDeclareableMarriages,
   getViewerMatchState,
-  applyRoundResult,
   getMatchWinner,
   isMatchOver,
   getValidFollowerCards,
@@ -170,6 +169,28 @@ describe("getViewerMatchState", () => {
     expect(Array.isArray(viewerState.game.stock)).toBe(false);
     expect(Number.isNaN(viewerState.game.roundScores[0])).toBe(true);
     expect(viewerState.declare66GracePeriodMs).toBe(DECLARE_66_GRACE_PERIOD_MS);
+  });
+
+  test("keeps opponent round score hidden while round result is null", () => {
+    const matchState = buildMatchState();
+
+    const viewerState = getViewerMatchState(matchState, 0);
+
+    expect(Number.isNaN(viewerState.game.roundScores[1])).toBe(true);
+  });
+
+  test("reveals opponent round score when round result is present", () => {
+    const matchState = buildMatchState();
+    matchState.game.roundResult = {
+      winner: 0,
+      gamePoints: 1,
+      reason: "declared_66",
+    };
+
+    const viewerState = getViewerMatchState(matchState, 0);
+
+    expect(viewerState.game.roundScores[1]).toBe(matchState.game.roundScores[1]);
+    expect(Number.isNaN(viewerState.game.roundScores[1])).toBe(false);
   });
 });
 
@@ -450,17 +471,6 @@ describe("initializeMatch", () => {
     expect(firstMatch.matchScores).not.toBe(secondMatch.matchScores);
     expect(firstMatch.matchScores).toEqual([0, 0]);
     expect(secondMatch.matchScores).toEqual([0, 0]);
-  });
-});
-
-describe("applyRoundResult", () => {
-  test("increments the winner's match score", () => {
-    const matchState = initializeMatch();
-
-    const nextState = applyRoundResult(matchState, 1, 2);
-
-    expect(nextState.matchScores).toEqual([0, 2]);
-    expect(matchState.matchScores).toEqual([0, 0]);
   });
 });
 
