@@ -1597,13 +1597,69 @@ describe("playTrick", () => {
       { suit: "spades", rank: "9" },
     ]);
     expect(nextState.game.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
-    expect(nextState.game.roundScores).toEqual([20, 5]);
+    expect(nextState.game.roundScores).toEqual([30, 5]);
     expect(nextState.game.canDeclareWindow).toBe(0);
     expect(nextState.game.lastCompletedTrick).toEqual({
       leaderIndex: 1,
       leaderCard: { suit: "hearts", rank: "10" },
       followerCard: { suit: "spades", rank: "9" },
     });
+  });
+
+  test("awards the last trick bonus on final exhaustion trick", () => {
+    const state: GameState = {
+      playerHands: [[{ suit: "clubs", rank: "J" }], [{ suit: "clubs", rank: "Q" }]],
+      stock: [],
+      trumpCard: null,
+      trumpSuit: "spades",
+      isClosed: false,
+      leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
+      closedBy: null,
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+      canDeclareWindow: null,
+      roundResult: null,
+    };
+
+    const nextState = playTrick(
+      state,
+      0,
+      { suit: "clubs", rank: "J" },
+      { suit: "clubs", rank: "Q" },
+    );
+
+    expect(nextState.game.roundScores).toEqual([0, 15]);
+  });
+
+  test("does not award the last trick bonus for closed deck rounds", () => {
+    const state: GameState = {
+      playerHands: [[{ suit: "clubs", rank: "J" }], [{ suit: "clubs", rank: "Q" }]],
+      stock: [],
+      trumpCard: null,
+      trumpSuit: "spades",
+      isClosed: true,
+      leader: 0,
+      currentTrick: null,
+      lastCompletedTrick: null,
+      closedBy: 0,
+      wonTricks: [[], []],
+      roundScores: [0, 0],
+      declaredMarriages: [],
+      canDeclareWindow: null,
+      roundResult: null,
+    };
+
+    const nextState = playTrick(
+      state,
+      0,
+      { suit: "clubs", rank: "J" },
+      { suit: "clubs", rank: "Q" },
+    );
+
+    expect(nextState.game.roundScores).toEqual([0, 5]);
   });
 
   test("throws when the leader card is not in hand", () => {
