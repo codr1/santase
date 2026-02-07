@@ -16,6 +16,48 @@ Examples:
 
   
 
+## Security Hardening
+
+<!-- BEGIN WIP: STORY-0037 -->
+Per-room SSE connection limit (max 4 connections per room); excess connections rejected with appropriate error. Global SSE connection cap; new connections rejected when cap reached.
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+POST /rooms rate-limited per IP (max 5 rooms per minute); excess requests return 429.
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+Guest identity cryptographically bound via a guest token issued on first SSE connection; all guest POST endpoints require a valid guest token.
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+POST /rooms/:code/next-round requires caller to be an authenticated player (host or guest token).
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+Bun.serve idleTimeout set to a non-zero value (e.g., 30s) instead of 0.
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+Heartbeat timers (setInterval) cleared when a room is deleted via removeRoom(). Heartbeat pings no longer reset room lastActivity; only real game actions (POST endpoints) touch the room.
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+Absolute room TTL enforced (e.g., 2 hours) independent of activity; rooms deleted when TTL expires.
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+All HTML responses include security headers: Content-Security-Policy, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin.
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+CDN scripts (Tailwind, HTMX, GSAP) include integrity and crossorigin attributes (SRI hashes).
+<!-- END WIP -->
+
+<!-- BEGIN WIP: STORY-0037 -->
+Request body size checked before JSON parsing on all POST endpoints; requests over 1KB rejected with 413.
+<!-- END WIP -->
+
 RULESET 1:
 
 
