@@ -147,7 +147,7 @@ Player index determined by `hostToken` query param or `hostToken-{code}` cookie 
 - Validates card is in player's hand
 - For leader: sets `currentTrick` with played card; processes marriage if declared; clears `canDeclareWindow` when no marriage is declared
 - For follower: delegates to `playTrick()` which enforces follow-suit rules when deck is closed/exhausted, resolves trick winner, awards points, and draws from stock
-- Ends round when hands exhausted: applies game points to match scores immediately (3 points if closer failed, otherwise `calculateGamePoints` based on loser's score)
+- Ends round when hands exhausted: awards last trick bonus (10 points to the final trick winner, only in natural exhaustion — not when deck was closed), then applies game points to match scores immediately (3 points if closer failed, otherwise `calculateGamePoints` based on loser's score)
 - Broadcasts `game-state` to all connected clients
 
 ## Exchange Trump Endpoint
@@ -365,6 +365,8 @@ type Card = { suit: Suit; rank: Rank };
 
 **Marriage points**: Regular=20, Trump=40
 
+**Last trick bonus**: 10 points awarded to the winner of the final trick when the deck is exhausted naturally (not when closed)
+
 **Declaration threshold**: 66 points
 
 **Declare 66 grace period**: `DECLARE_66_GRACE_PERIOD_MS = 2600` (exported from `src/game/config.ts`; used by server for play-delay enforcement and sent to clients in `ViewerMatchState`)
@@ -437,7 +439,7 @@ type PlayTrickResult = {
 - `findDeclareableMarriages(state, playerIndex)`: Returns array of suits player can declare
 - `declareMarriage(state, playerIndex, suit)`: Returns new GameState with marriage declared and points added; opens `canDeclareWindow` for the declaring player
 - `isDeckClosedOrExhausted(state)`: Returns true if deck is closed or stock is empty
-- `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; sets `lastCompletedTrick` and clears `currentTrick`; opens `canDeclareWindow` for the trick winner; enforces follow-suit rules when deck is closed/exhausted; calls `drawFromStock` internally; returns `PlayTrickResult` (`{ game, winnerIndex, trickPoints }`)
+- `playTrick(state, leaderIndex, leaderCard, followerCard)`: Resolves a trick, removes cards from hands, awards winner the cards and points; sets `lastCompletedTrick` and clears `currentTrick`; opens `canDeclareWindow` for the trick winner; enforces follow-suit rules when deck is closed/exhausted; calls `drawFromStock` internally; when the trick is the final exhaustion trick (both hands and stock empty) and the deck was not closed, adds `LAST_TRICK_BONUS` (10) to the winner's round score; returns `PlayTrickResult` (`{ game, winnerIndex, trickPoints }`)
 - `drawFromStock(state, winnerIndex)`: After a trick, winner draws top stock card, loser draws next (or trump card on final draw); sets trumpCard to null when exhausted; no-op if stock empty
 - `getValidFollowerCards(hand, ledCard, trumpSuit, deckClosedOrExhausted)`: Returns valid cards follower can play; when deck is closed/exhausted, must head in led suit if possible, else play any led suit card, else play trump, else any card
 
