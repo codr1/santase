@@ -29,6 +29,7 @@ Bun-based HTTP server. Port configurable via `BUN_PORT` environment variable, de
 | POST | `/rooms/:code/declare-66` | Declare 66 points to win the round |
 | POST | `/rooms/:code/ready` | Mark player as ready for next round |
 | POST | `/rooms/:code/next-round` | Force-start next round (countdown fallback) |
+| POST | `/rooms/:code/new-match` | Start a new match after match ends (host only) |
 | GET | `/rooms/:code/results` | Match results page |
 | GET | `/sse/:code` | SSE connection endpoint |
 | GET | `/public/*` | Static file serving (path-traversal protected) |
@@ -253,6 +254,33 @@ Same as play endpoint (hostToken query param or cookie).
 - If the current round has no result (already started), returns 200 with no changes
 - Otherwise starts a new round via `startNewRound`, resets ready flags, broadcasts `game-state`
 
+## New Match Endpoint
+
+`POST /rooms/:code/new-match` resets the room for a fresh match after the current match ends.
+
+### Request
+
+```typescript
+{ hostToken: string }
+```
+
+### Responses
+
+| Status | Condition |
+|--------|-----------|
+| 200 | New match started, room fully reset |
+| 400 | Invalid JSON payload |
+| 403 | Caller is not the host |
+| 409 | Match is not over yet |
+
+### Behavior
+
+- Only the host can start a new match (validated via `hostToken` in body)
+- Replaces `matchState` with a fresh `initializeMatch()` result
+- Resets room flags: `forfeit`, `draw`, `hostReady`, `guestReady`, `lastTrickCompletedAt`
+- Clears any pending disconnect timeouts
+- Broadcasts `game-state` to all connected clients with the fresh match state
+
 ## Results Page
 
 `GET /rooms/:code/results` renders the match results page when the match is over.
@@ -312,6 +340,8 @@ Renders the interactive game board with viewer-specific perspective.
 - **Real-time DOM updates**: Client-side JavaScript processes `game-state` events to update player hand, opponent hand count, trump card, stock pile, won pile displays, trick area, won counters, round scores, and match scores without full page reload; uses GSAP animations for card additions/removals
 - **Click-to-play**: Player cards are clickable when it's the player's turn; clicking sends POST to `/rooms/:code/play`; automatically declares marriage when leading with K or Q of a declareable suit
 - **Round-end modal**: Shown when a round ends (including the final round); displays round winner, reason, round/match scores, and game points earned; includes a 10-second countdown timer and a "Ready" button that sends POST to `/rooms/:code/ready`; when countdown expires, sends POST to `/rooms/:code/next-round`; shows opponent ready state via `ready-state` SSE events; pauses countdown when opponent disconnects; when match is over, shows "Match complete" section with a "View results now" link and auto-redirects to `/rooms/:code/results` after 3 seconds
+- **Match-over overlay**: Full-screen overlay shown when the match ends; displays match winner message, final match scores, last round details (winner, reason, round scores, game points); includes "New Match" button (host only, sends POST to `/rooms/:code/new-match`), "Return Home" link, and "View Full Results" link; shown after a 1-second delay following round-end modal display; for forfeit matches (opponent disconnected), shown immediately on game page load with "Victory by forfeit" / "Defeat by forfeit" messaging; server sets `initialMatchOver` flag when the game page is loaded with a completed match
+- **New match reset**: When the server broadcasts a fresh match state (scores [0,0], no round result), the client resets all UI: hides round-end modal and match-over overlay, clears trick area, redraws the board with fresh cards
 - **Disconnect handling**: Monitors `status` SSE events for opponent connection state; pauses round-end countdown when opponent disconnects; shows "Opponent disconnected" status text; resumes countdown on reconnect
 - **Draw redirect**: If the room is in draw state, the game page returns 303 redirect to the results page
 
