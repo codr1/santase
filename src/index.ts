@@ -8,13 +8,13 @@ import { renderResultsPage } from "./templates/results";
 import { createRoom, getRoom, normalizeRoomCode, startRoomCleanup, touchRoom, type Room } from "./rooms";
 import { broadcastGameState, broadcastReadyState, clearRoomDisconnectTimeouts, handleSse } from "./sse";
 import { escapeHtml } from "./utils/html";
+import { ts } from "./utils/log";
 import {
   calculateGamePoints,
   canDeclare66,
   canDeclareMarriage,
   canCloseDeck,
   canExchangeTrump9,
-  DECLARE_66_GRACE_PERIOD_MS,
   closeDeck,
   declare66,
   declareMarriage,
@@ -74,45 +74,10 @@ function resolveRoom(normalizedCode: string): RoomResolution {
   return { error: "Room not found. Double-check the code.", status: 404 };
 }
 
-function parseCookies(cookieHeader: string | null): Record<string, string> {
-  if (!cookieHeader) {
-    return {};
-  }
-  const result: Record<string, string> = {};
-  const pairs = cookieHeader.split(";").map((entry) => entry.trim());
-  for (const pair of pairs) {
-    if (!pair) {
-      continue;
-    }
-    const separatorIndex = pair.indexOf("=");
-    if (separatorIndex === -1) {
-      continue;
-    }
-    const name = pair.slice(0, separatorIndex).trim();
-    const value = pair.slice(separatorIndex + 1).trim();
-    if (!name) {
-      continue;
-    }
-    try {
-      result[name] = decodeURIComponent(value);
-    } catch {
-      result[name] = value;
-    }
-  }
-  return result;
-}
-
-function getHostCookieName(code: string): string {
-  return `hostToken-${code}`;
-}
-
 function resolveViewerIndex(request: Request, room: Room): 0 | 1 {
   const url = new URL(request.url);
   const tokenFromQuery = url.searchParams.get("hostToken");
-  const cookies = parseCookies(request.headers.get("cookie"));
-  const tokenFromCookie = cookies[getHostCookieName(room.code)];
-  const token = tokenFromQuery ?? tokenFromCookie;
-  if (token && token === room.hostToken) {
+  if (tokenFromQuery && tokenFromQuery === room.hostToken) {
     return room.hostPlayerIndex;
   }
   return room.hostPlayerIndex === 0 ? 1 : 0;
@@ -191,6 +156,7 @@ export async function handleRequest(request: Request): Promise<Response> {
 
   if (request.method === "POST" && path === "/rooms") {
     const room = createRoom();
+    console.log(`[${ts()}] ROUTE POST /rooms → created room=${room.code} redirecting to lobby`);
     return Response.redirect(`/rooms/${room.code}/lobby`, 303);
   }
 
@@ -299,7 +265,6 @@ export async function handleRequest(request: Request): Promise<Response> {
         game: nextGame,
         matchScores: nextScores,
       };
-      room.lastTrickCompletedAt = null;
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);
       return jsonResponse({ ok: true }, 200);
@@ -395,7 +360,6 @@ export async function handleRequest(request: Request): Promise<Response> {
       room.hostReady = false;
       room.guestReady = false;
       clearRoomDisconnectTimeouts(room);
-      room.lastTrickCompletedAt = null;
 
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);
@@ -448,14 +412,6 @@ export async function handleRequest(request: Request): Promise<Response> {
         return jsonError("Not your turn to play.", 409);
       }
       if (!currentTrick) {
-        const lastCompletedAt = room.lastTrickCompletedAt;
-        if (
-          playerIndex === game.leader &&
-          lastCompletedAt !== null &&
-          Date.now() - lastCompletedAt < DECLARE_66_GRACE_PERIOD_MS
-        ) {
-          return jsonError("Please wait before playing.", 409);
-        }
         let updatedGame = game;
         if (marriageSuit) {
           if (card.suit !== marriageSuit || (card.rank !== "K" && card.rank !== "Q")) {
@@ -508,7 +464,6 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       const winnerIndex = trickResult.winnerIndex;
       let nextGame = trickResult.game;
-      room.lastTrickCompletedAt = Date.now();
 
       let nextMatchState = { ...room.matchState, game: nextGame };
       if (
@@ -552,9 +507,6 @@ export async function handleRequest(request: Request): Promise<Response> {
         }
       }
 
-      if (nextMatchState.game.roundResult) {
-        room.lastTrickCompletedAt = null;
-      }
       room.matchState = nextMatchState;
       touchRoom(normalizedCode);
       broadcastGameState(normalizedCode, room.matchState);
@@ -583,33 +535,29 @@ export async function handleRequest(request: Request): Promise<Response> {
     const sseMatch = path.match(/^\/sse\/([^/]+)$/);
     if (sseMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(sseMatch[1]));
+      console.log(`[${ts()}] ROUTE GET /sse/${normalizedCode}`);
       return handleSse(request, normalizedCode);
     }
 
     const lobbyMatch = path.match(/^\/rooms\/([^/]+)\/lobby$/);
     if (lobbyMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(lobbyMatch[1]));
+      console.log(`[${ts()}] ROUTE GET /rooms/${normalizedCode}/lobby (host lobby page)`);
       const resolution = resolveRoom(normalizedCode);
       if ("error" in resolution) {
+        console.log(`[${ts()}] ROUTE GET /rooms/${normalizedCode}/lobby → error: ${resolution.error}`);
         return htmlResponse(
           renderJoinPage({ error: resolution.error, code: normalizedCode }),
           resolution.status,
         );
       }
       touchRoom(normalizedCode);
-      const cookieName = getHostCookieName(resolution.room.code);
-      const cookieValue = encodeURIComponent(resolution.room.hostToken);
-      const cookiePath = `/rooms/${encodeURIComponent(resolution.room.code)}`;
       return htmlResponse(
         renderLobbyPage({
           code: resolution.room.code,
           isHost: true,
           hostToken: resolution.room.hostToken,
         }),
-        200,
-        {
-          "set-cookie": `${cookieName}=${cookieValue}; Path=${cookiePath}; SameSite=Lax; HttpOnly`,
-        },
       );
     }
 
@@ -618,6 +566,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(gameMatch[1]));
       const resolution = resolveRoom(normalizedCode);
       if ("error" in resolution) {
+        console.log(`[${ts()}] ROUTE GET /rooms/${normalizedCode}/game → error: ${resolution.error}`);
         return htmlResponse(
           renderJoinPage({ error: resolution.error, code: normalizedCode }),
           resolution.status,
@@ -625,12 +574,17 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       touchRoom(normalizedCode);
       if (resolution.room.draw) {
-        return Response.redirect(
-          `/rooms/${encodeURIComponent(resolution.room.code)}/results`,
-          303,
-        );
+        const drawRedirectUrl = `/rooms/${encodeURIComponent(resolution.room.code)}/results`;
+        const viewerIndex = resolveViewerIndex(request, resolution.room);
+        const isHost = viewerIndex === resolution.room.hostPlayerIndex;
+        const redirectUrl = isHost
+          ? `${drawRedirectUrl}?hostToken=${encodeURIComponent(resolution.room.hostToken)}`
+          : drawRedirectUrl;
+        console.log(`[${ts()}] ROUTE GET /rooms/${normalizedCode}/game → draw redirect`);
+        return Response.redirect(redirectUrl, 303);
       }
       const viewerIndex = resolveViewerIndex(request, resolution.room);
+      console.log(`[${ts()}] ROUTE GET /rooms/${normalizedCode}/game viewerIndex=${viewerIndex} matchOver=${isMatchOver(resolution.room.matchState)}`);
       return htmlResponse(
         renderGamePage({
           code: resolution.room.code,
@@ -654,10 +608,13 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       touchRoom(normalizedCode);
       if (!isMatchOver(resolution.room.matchState) && !resolution.room.draw) {
-        return Response.redirect(
-          `/rooms/${encodeURIComponent(resolution.room.code)}/game`,
-          303,
-        );
+        const gameUrl = `/rooms/${encodeURIComponent(resolution.room.code)}/game`;
+        const viewerIndex = resolveViewerIndex(request, resolution.room);
+        const isHost = viewerIndex === resolution.room.hostPlayerIndex;
+        const redirectUrl = isHost
+          ? `${gameUrl}?hostToken=${encodeURIComponent(resolution.room.hostToken)}`
+          : gameUrl;
+        return Response.redirect(redirectUrl, 303);
       }
       const viewerIndex = resolveViewerIndex(request, resolution.room);
       return htmlResponse(
@@ -674,8 +631,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     const roomMatch = path.match(/^\/rooms\/([^/]+)$/);
     if (roomMatch) {
       const normalizedCode = normalizeRoomCode(decodeURIComponent(roomMatch[1]));
+      console.log(`[${ts()}] ROUTE GET /rooms/${normalizedCode} (guest lobby page)`);
       const resolution = resolveRoom(normalizedCode);
       if ("error" in resolution) {
+        console.log(`[${ts()}] ROUTE GET /rooms/${normalizedCode} → error: ${resolution.error}`);
         return htmlResponse(
           renderJoinPage({ error: resolution.error, code: normalizedCode }),
           resolution.status,

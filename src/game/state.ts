@@ -10,8 +10,6 @@ import {
   type Card,
   type Suit,
 } from "./cards";
-import { DECLARE_66_GRACE_PERIOD_MS } from "./config";
-
 const INITIAL_DEAL_SIZE = 3;
 const HAND_SIZE = 6;
 const VALAT_OPPONENT_SCORE = 0;
@@ -69,7 +67,6 @@ export type ViewerGameState = Omit<GameState, "playerHands" | "stock"> & {
 
 export type ViewerMatchState = Omit<MatchState, "game"> & {
   game: ViewerGameState;
-  declare66GracePeriodMs: number;
 };
 
 export type PlayTrickResult = {
@@ -97,7 +94,6 @@ export function getViewerMatchState(
 
   return {
     ...matchState,
-    declare66GracePeriodMs: DECLARE_66_GRACE_PERIOD_MS,
     game: {
       ...matchState.game,
       playerHands,

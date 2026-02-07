@@ -52,12 +52,17 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
       </p>
     </main>
     <script>
+      const _lobbyTs = () => new Date().toISOString();
       const sseRootEl = document.querySelector("[sse-connect]");
       const gameStartListener = document.getElementById("game-start-listener");
       const lobbyStatusEl = document.getElementById("lobby-status");
       ${renderIsHostDetectionSource(isHost)}
+      const hostToken = ${JSON.stringify(hostToken ?? null)};
       const opponentLabel = "Opponent";
       let sseProcessingEnabled = true;
+
+      console.log("[" + _lobbyTs() + "] LOBBY-INIT isHost=" + isHost + " sseUrl=${safeSseUrl}");
+      console.log("[" + _lobbyTs() + "] LOBBY-INIT sseRootEl=" + !!sseRootEl + " gameStartListener=" + !!gameStartListener);
 
       ${renderDisconnectSseSource()}
 
@@ -67,23 +72,34 @@ export function renderLobbyPage({ code, isHost = false, hostToken }: LobbyOption
       };
 
       if (gameStartListener) {
-        console.log("[lobby] game-start listener attached");
+        console.log("[" + _lobbyTs() + "] LOBBY game-start listener attached");
         gameStartListener.addEventListener("htmx:afterSettle", (event) => {
-          console.log("[lobby] SSE event", event.type, event.detail);
-          const destination = gameStartListener.textContent?.trim() || ${gamePathJson};
-          console.log("[lobby] redirect", destination);
+          console.log("[" + _lobbyTs() + "] LOBBY game-start SSE event received", event.type);
+          let destination = gameStartListener.textContent?.trim() || ${gamePathJson};
+          if (isHost && hostToken) {
+            destination += (destination.includes("?") ? "&" : "?") + "hostToken=" + encodeURIComponent(hostToken);
+          }
+          console.log("[" + _lobbyTs() + "] LOBBY redirecting to", destination);
           cleanupBeforeRedirect();
           window.location.assign(destination);
         });
+      } else {
+        console.log("[" + _lobbyTs() + "] LOBBY WARNING: no game-start listener element found (isHost=" + isHost + ")");
       }
+
       ${renderParseStatusPayloadSource()}
       ${renderUpdateStatusTextSource("lobbyStatusEl")}
       document.body.addEventListener("htmx:sseMessage", (event) => {
-        if (!sseProcessingEnabled) return;
+        if (!sseProcessingEnabled) {
+          console.log("[" + _lobbyTs() + "] LOBBY SSE message ignored (processing disabled) type=" + (event.detail?.type || "unknown"));
+          return;
+        }
         const detail = event.detail || {};
+        console.log("[" + _lobbyTs() + "] LOBBY SSE message type=" + detail.type);
         if (detail.type !== "status") return;
         const parsed = parseStatusPayload(detail.data || "");
         if (parsed) {
+          console.log("[" + _lobbyTs() + "] LOBBY status update hostConn=" + parsed.hostConnected + " guestConn=" + parsed.guestConnected);
           updateStatusText(parsed.hostConnected, parsed.guestConnected);
         }
       });

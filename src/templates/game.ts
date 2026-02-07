@@ -12,7 +12,6 @@ import {
   canCloseDeck as canCloseDeckCheck,
   canDeclare66,
   canExchangeTrump9,
-  DECLARE_66_GRACE_PERIOD_MS,
   getViewerMatchState,
 } from "../game";
 import type { Card, Suit } from "../game/cards";
@@ -352,9 +351,6 @@ export function renderGamePage({
               <p class="mt-3 text-center text-xs text-emerald-200/70" data-trick-status="true">
                 ${trickStatusText}
               </p>
-              <p class="mt-2 text-center text-xs font-semibold text-amber-200" data-grace-countdown="true" hidden>
-                Leader can play in 0.0s
-              </p>
             </div>
 
             <div class="rounded-2xl bg-emerald-950/70 p-4 shadow-inner shadow-black/40">
@@ -586,11 +582,11 @@ export function renderGamePage({
       const hostToken = ${JSON.stringify(hostToken ?? null)};
       const initialState = ${JSON.stringify(viewerState)};
       const initialMatchOver = ${initialMatchOver ? "true" : "false"};
-      const defaultDeclare66GracePeriodMs = ${DECLARE_66_GRACE_PERIOD_MS};
-      const declare66GracePeriodMs = Number.isFinite(initialState?.declare66GracePeriodMs)
-        ? Math.max(0, Number(initialState.declare66GracePeriodMs))
-        : defaultDeclare66GracePeriodMs;
       ${renderIsHostDetectionSource(Boolean(hostToken))}
+      const apiUrl = (action) => {
+        const base = "/rooms/" + encodeURIComponent(roomCode) + action;
+        return hostToken ? base + "?hostToken=" + encodeURIComponent(hostToken) : base;
+      };
       let currentState = initialState;
       const svgCardsCdn = "/public/svg-cards.svg";
       const cardBackUrl = svgCardsCdn + "#back";
@@ -634,8 +630,6 @@ export function renderGamePage({
       let declareRequestPending = false;
       let pendingTrickResolutionKey = null;
       let latestReadyState = null;
-      let graceCountdownIntervalId = null;
-      let graceCountdownDeadlineMs = null;
       let matchOverOverlayTimeoutId = null;
       let trickResolutionTimeoutId = null;
 
@@ -676,7 +670,6 @@ export function renderGamePage({
       const returnHomeLink = document.querySelector("[data-return-home-link]");
       const viewFullResultsLink = document.querySelector("[data-view-full-results-link]");
       const actionNoticeEl = document.querySelector("[data-action-notice]");
-      const graceCountdownEl = document.querySelector("[data-grace-countdown]");
       const actionNoticeAutoDismissMs = 4000;
       let actionNoticeTimeoutId = null;
 
@@ -727,44 +720,6 @@ export function renderGamePage({
         newMatchButton.textContent = "Starting new match...";
       };
 
-      const stopGraceCountdown = () => {
-        if (graceCountdownIntervalId !== null) {
-          window.clearInterval(graceCountdownIntervalId);
-          graceCountdownIntervalId = null;
-        }
-        graceCountdownDeadlineMs = null;
-        if (!graceCountdownEl) {
-          return;
-        }
-        graceCountdownEl.hidden = true;
-      };
-
-      const updateGraceCountdown = () => {
-        if (!graceCountdownEl || graceCountdownDeadlineMs === null) {
-          return;
-        }
-        const remainingMs = Math.max(0, graceCountdownDeadlineMs - Date.now());
-        const remainingSeconds = (remainingMs / 1000).toFixed(1);
-        graceCountdownEl.textContent = "Leader can play in " + remainingSeconds + "s";
-        graceCountdownEl.hidden = false;
-        if (remainingMs <= 0) {
-          stopGraceCountdown();
-        }
-      };
-
-      const startGraceCountdown = (durationMs) => {
-        const safeDurationMs = Number.isFinite(durationMs)
-          ? Math.max(0, Number(durationMs))
-          : declare66GracePeriodMs;
-        if (safeDurationMs <= 0) {
-          stopGraceCountdown();
-          return;
-        }
-        stopGraceCountdown();
-        graceCountdownDeadlineMs = Date.now() + safeDurationMs;
-        updateGraceCountdown();
-        graceCountdownIntervalId = window.setInterval(updateGraceCountdown, 100);
-      };
       const sseRootEl = document.querySelector("[sse-connect]");
       let redirectingToResults = false;
       let sseProcessingEnabled = true;
@@ -821,7 +776,7 @@ export function renderGamePage({
         }
         redirectingToResults = true;
         cleanupBeforeRedirect();
-        window.location.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
+        window.location.href = apiUrl("/results");
       };
 
       if (resultsLink) {
@@ -903,7 +858,7 @@ export function renderGamePage({
           roundResult ? roundResult.gamePoints : state?.draw === true ? 0 : "-",
         );
         if (viewFullResultsLink) {
-          viewFullResultsLink.href = "/rooms/" + encodeURIComponent(roomCode) + "/results";
+          viewFullResultsLink.href = apiUrl("/results");
         }
         setNewMatchButtonIdle();
         matchOverOverlay.removeAttribute("hidden");
@@ -1056,13 +1011,9 @@ export function renderGamePage({
             }
             nextRoundRequestPending = true;
             try {
-              const response = await fetch(
-                "/rooms/" + encodeURIComponent(roomCode) + "/next-round",
-                {
-                  method: "POST",
-                  credentials: "same-origin",
-                },
-              );
+              const response = await fetch(apiUrl("/next-round"), {
+                method: "POST",
+              });
               if (!response.ok) {
                 const errorText = await response.text().catch(() => "");
                 console.warn("Next round rejected", response.status, errorText);
@@ -1121,7 +1072,6 @@ export function renderGamePage({
       };
 
       const showRoundEndModal = (state) => {
-        stopGraceCountdown();
         if (!roundEndModal) {
           return;
         }
@@ -1152,7 +1102,6 @@ export function renderGamePage({
           return;
         }
         roundEndModal.setAttribute("hidden", "");
-        stopGraceCountdown();
         stopRoundEndCountdown();
         resetRoundEndModal(true);
         if (matchCompleteEl) {
@@ -1851,7 +1800,6 @@ export function renderGamePage({
           window.clearTimeout(matchOverOverlayTimeoutId);
           matchOverOverlayTimeoutId = null;
         }
-        stopGraceCountdown();
         stopRoundEndCountdown();
         latestReadyState = null;
         clearTrickArea();
@@ -2116,9 +2064,8 @@ export function renderGamePage({
             }
             playRequestPending = true;
             try {
-              const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/play", {
+              const response = await fetch(apiUrl("/play"), {
                 method: "POST",
-                credentials: "same-origin",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify(payload),
               });
@@ -2145,13 +2092,9 @@ export function renderGamePage({
             exchangeRequestPending = true;
             updateExchangeTrumpButton(currentState);
             try {
-              const response = await fetch(
-                "/rooms/" + encodeURIComponent(roomCode) + "/exchange-trump",
-                {
-                  method: "POST",
-                  credentials: "same-origin",
-                },
-              );
+              const response = await fetch(apiUrl("/exchange-trump"), {
+                method: "POST",
+              });
               if (!response.ok) {
                 const errorText = await response.text().catch(() => "");
                 console.warn("Trump exchange rejected", response.status, errorText);
@@ -2184,13 +2127,9 @@ export function renderGamePage({
             closeRequestPending = true;
             updateCloseDeckButton(currentState);
             try {
-              const response = await fetch(
-                "/rooms/" + encodeURIComponent(roomCode) + "/close-deck",
-                {
-                  method: "POST",
-                  credentials: "same-origin",
-                },
-              );
+              const response = await fetch(apiUrl("/close-deck"), {
+                method: "POST",
+              });
               if (!response.ok) {
                 const errorText = await response.text().catch(() => "");
                 console.warn("Close deck rejected", response.status, errorText);
@@ -2215,13 +2154,9 @@ export function renderGamePage({
             declareRequestPending = true;
             updateDeclare66Button(currentState);
             try {
-              const response = await fetch(
-                "/rooms/" + encodeURIComponent(roomCode) + "/declare-66",
-                {
-                  method: "POST",
-                  credentials: "same-origin",
-                },
-              );
+              const response = await fetch(apiUrl("/declare-66"), {
+                method: "POST",
+              });
               if (!response.ok) {
                 const body = await response.json().catch(() => null);
                 console.warn("Declare 66 rejected", response.status, body);
@@ -2251,9 +2186,8 @@ export function renderGamePage({
             updateReadyButtonState(latestReadyState);
             let requestSucceeded = false;
             try {
-              const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/ready", {
+              const response = await fetch(apiUrl("/ready"), {
                 method: "POST",
-                credentials: "same-origin",
               });
               if (!response.ok) {
                 const errorText = await response.text().catch(() => "");
@@ -2284,9 +2218,8 @@ export function renderGamePage({
             }
             setNewMatchButtonLoading();
             try {
-              const response = await fetch("/rooms/" + encodeURIComponent(roomCode) + "/new-match", {
+              const response = await fetch(apiUrl("/new-match"), {
                 method: "POST",
-                credentials: "same-origin",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ hostToken }),
               });
@@ -2449,16 +2382,6 @@ export function renderGamePage({
           return;
         }
 
-        const nextGame = parsedState.game;
-        const currentGame = currentState?.game;
-        const trickJustCompleted = Boolean(currentGame?.currentTrick) &&
-          !nextGame.currentTrick &&
-          currentGame.leader !== nextGame.leader;
-        if (nextGame.currentTrick || nextGame.roundResult) {
-          stopGraceCountdown();
-        } else if (trickJustCompleted) {
-          startGraceCountdown(parsedState.declare66GracePeriodMs);
-        }
         applyStateToBoard(parsedState, currentState);
 
         currentState = parsedState;

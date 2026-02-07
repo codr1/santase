@@ -1,5 +1,4 @@
 export type { Card, Suit, Rank } from "./cards";
-export { DECLARE_66_GRACE_PERIOD_MS } from "./config";
 export {
   CARD_POINTS,
   DECLARE_THRESHOLD,

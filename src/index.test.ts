@@ -3,7 +3,6 @@ import { handleRequest, resolvePort } from "./index";
 import { createRoom, deleteRoom } from "./rooms";
 import {
   calculateGamePoints,
-  DECLARE_66_GRACE_PERIOD_MS,
   type Card,
   type GameState,
 } from "./game";
@@ -204,6 +203,85 @@ describe("resolvePort", () => {
   });
 });
 
+describe("viewer identity (resolveViewerIndex)", () => {
+  test("resolves as host when hostToken query param matches", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 0);
+    try {
+      const response = await handleRequest(
+        new Request(`http://example/rooms/${room.code}/game?hostToken=${encodeURIComponent(HOST_TOKEN)}`),
+      );
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      // Host viewerIndex=0 (hostPlayerIndex=0), so JS variable should be 0
+      expect(html).toContain("const viewerIndex = 0;");
+      expect(html).toContain("const opponentIndex = 1;");
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("resolves as guest when no hostToken query param", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 0);
+    try {
+      const response = await handleRequest(
+        new Request(`http://example/rooms/${room.code}/game`),
+      );
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      // Guest viewerIndex=1 (hostPlayerIndex=0, so guest=1)
+      expect(html).toContain("const viewerIndex = 1;");
+      expect(html).toContain("const opponentIndex = 0;");
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("resolves as guest when hostToken query param is wrong", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 0);
+    try {
+      const response = await handleRequest(
+        new Request(`http://example/rooms/${room.code}/game?hostToken=wrong-token`),
+      );
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      // Wrong token → guest
+      expect(html).toContain("const viewerIndex = 1;");
+      expect(html).toContain("const opponentIndex = 0;");
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+
+  test("resolves correctly when hostPlayerIndex is 1", async () => {
+    const game = buildGameState();
+    const room = createTestRoom(game, 1);
+    try {
+      // Host with token → viewerIndex=1 (hostPlayerIndex)
+      const hostResponse = await handleRequest(
+        new Request(`http://example/rooms/${room.code}/game?hostToken=${encodeURIComponent(HOST_TOKEN)}`),
+      );
+      expect(hostResponse.status).toBe(200);
+      const hostHtml = await hostResponse.text();
+      expect(hostHtml).toContain("const viewerIndex = 1;");
+      expect(hostHtml).toContain("const opponentIndex = 0;");
+
+      // Guest without token → viewerIndex=0 (opposite of hostPlayerIndex)
+      const guestResponse = await handleRequest(
+        new Request(`http://example/rooms/${room.code}/game`),
+      );
+      expect(guestResponse.status).toBe(200);
+      const guestHtml = await guestResponse.text();
+      expect(guestHtml).toContain("const viewerIndex = 0;");
+      expect(guestHtml).toContain("const opponentIndex = 1;");
+    } finally {
+      deleteRoom(room.code);
+    }
+  });
+});
+
 describe("join flow", () => {
   test("creates then joins a room with normalized code", async () => {
     let roomCode: string | undefined;
@@ -387,7 +465,6 @@ describe("play endpoint", () => {
       const firstFollowResponse = await postPlay(room.code, { card: firstFollow }, false);
       expect(firstFollowResponse.status).toBe(200);
 
-      room.lastTrickCompletedAt = Date.now() - DECLARE_66_GRACE_PERIOD_MS;
       const secondLeadResponse = await postPlay(room.code, { card: secondLead }, true);
       expect(secondLeadResponse.status).toBe(200);
 
@@ -930,7 +1007,6 @@ describe("SSE payloads", () => {
       expect(payload.game.stock).toEqual({ count: game.stock.length });
       expect(payload.game.roundScores[0]).toBe(game.roundScores[0]);
       expect(payload.game.roundScores[1]).toBeNull();
-      expect(payload.declare66GracePeriodMs).toBe(DECLARE_66_GRACE_PERIOD_MS);
       expect(Array.isArray(payload.game.playerHands[1])).toBe(false);
       expect(Array.isArray(payload.game.stock)).toBe(false);
     } finally {
@@ -1009,7 +1085,6 @@ describe("new match endpoint", () => {
     room.draw = false;
     room.hostReady = true;
     room.guestReady = true;
-    room.lastTrickCompletedAt = Date.now();
     room.disconnectTimeouts.host = setTimeout(() => {}, 60_000);
     room.disconnectTimeouts.guest = setTimeout(() => {}, 60_000);
 
@@ -1038,7 +1113,6 @@ describe("new match endpoint", () => {
       expect(room.draw).toBe(false);
       expect(room.hostReady).toBe(false);
       expect(room.guestReady).toBe(false);
-      expect(room.lastTrickCompletedAt).toBeNull();
       expect(room.disconnectTimeouts.host).toBeUndefined();
       expect(room.disconnectTimeouts.guest).toBeUndefined();
       expect(room.disconnectTimeouts).toEqual({});

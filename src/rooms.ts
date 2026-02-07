@@ -1,4 +1,5 @@
 import { initializeMatch, isMatchOver, type MatchState } from "./game";
+import { ts } from "./utils/log";
 
 const ROOM_CODE_MIN_LENGTH = 4;
 const ROOM_CODE_MAX_LENGTH = 6;
@@ -25,7 +26,6 @@ export type Room = {
   draw: boolean;
   lastActivity: number;
   createdAt: number;
-  lastTrickCompletedAt: number | null;
   matchState: MatchState;
 };
 
@@ -81,12 +81,11 @@ export function createRoom(): Room {
         draw: false,
         lastActivity: now,
         createdAt: now,
-        lastTrickCompletedAt: null,
         matchState,
       };
       rooms.set(code, room);
       expiredRooms.delete(code);
-      console.log(`Room created: ${code}`);
+      console.log(`[${ts()}] ROOM-CREATED code=${code} hostPlayerIndex=${room.hostPlayerIndex}`);
       return room;
     }
   }
@@ -192,7 +191,7 @@ function removeRoom(code: string, reason: RoomDeleteReason, now = Date.now()): b
   room.disconnectTimeouts = {};
   rooms.delete(code);
   expiredRooms.set(code, { expiredAt: now, reason });
-  console.log(`Room deleted (${reason}): ${code}`);
+  console.log(`[${ts()}] ROOM-DELETED code=${code} reason=${reason}`);
   return true;
 }
 
