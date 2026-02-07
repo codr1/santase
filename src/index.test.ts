@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { handleRequest, resolvePort } from "./index";
 import { createRoom, deleteRoom } from "./rooms";
-import { DECLARE_66_GRACE_PERIOD_MS, type Card, type GameState } from "./game";
+import {
+  calculateGamePoints,
+  DECLARE_66_GRACE_PERIOD_MS,
+  type Card,
+  type GameState,
+} from "./game";
 
 const HOST_TOKEN = "host-token";
 const decoder = new TextDecoder();
@@ -357,27 +362,44 @@ describe("play endpoint", () => {
     }
   });
 
-  test("ends the round when the final trick exhausts the hands", async () => {
-    const leaderCard: Card = { suit: "hearts", rank: "A" };
-    const followerCard: Card = { suit: "hearts", rank: "10" };
+  test("plays to exhaustion and applies the last-trick bonus to round and game scoring", async () => {
+    const firstLead: Card = { suit: "hearts", rank: "A" };
+    const firstFollow: Card = { suit: "hearts", rank: "9" };
+    const secondLead: Card = { suit: "clubs", rank: "A" };
+    const secondFollow: Card = { suit: "clubs", rank: "9" };
     const game = buildGameState({
-      playerHands: [[], [followerCard]],
+      playerHands: [
+        [firstLead, secondLead],
+        [firstFollow, secondFollow],
+      ],
       leader: 0,
-      currentTrick: { leaderIndex: 0, leaderCard },
       stock: [],
       trumpCard: null,
       trumpSuit: "spades",
+      roundScores: [34, 32],
     });
     const room = createTestRoom(game, 0);
 
     try {
-      const response = await postPlay(room.code, { card: followerCard }, false);
-      expect(response.status).toBe(200);
+      const firstLeadResponse = await postPlay(room.code, { card: firstLead }, true);
+      expect(firstLeadResponse.status).toBe(200);
+
+      const firstFollowResponse = await postPlay(room.code, { card: firstFollow }, false);
+      expect(firstFollowResponse.status).toBe(200);
+
+      room.lastTrickCompletedAt = Date.now() - DECLARE_66_GRACE_PERIOD_MS;
+      const secondLeadResponse = await postPlay(room.code, { card: secondLead }, true);
+      expect(secondLeadResponse.status).toBe(200);
+
+      const secondFollowResponse = await postPlay(room.code, { card: secondFollow }, false);
+      expect(secondFollowResponse.status).toBe(200);
 
       const nextGame = room.matchState.game;
       expect(nextGame.roundResult?.reason).toBe("exhausted");
       expect(nextGame.roundResult?.winner).toBe(0);
-      expect(room.matchState.matchScores).toEqual([3, 0]);
+      expect(nextGame.roundScores).toEqual([66, 32]);
+      expect(nextGame.roundResult?.gamePoints).toBe(calculateGamePoints(nextGame.roundScores[1]));
+      expect(room.matchState.matchScores).toEqual([2, 0]);
     } finally {
       deleteRoom(room.code);
     }
@@ -519,7 +541,7 @@ describe("exchange trump endpoint", () => {
 describe("declare 66 endpoint", () => {
   test("declares 66 and updates match scores", async () => {
     const game = buildGameState({
-      roundScores: [66, 0],
+      roundScores: [66, 32],
       canDeclareWindow: 0,
     });
     const room = createTestRoom(game, 0);
@@ -531,7 +553,8 @@ describe("declare 66 endpoint", () => {
       const nextGame = room.matchState.game;
       expect(nextGame.roundResult?.reason).toBe("declared_66");
       expect(nextGame.roundResult?.winner).toBe(0);
-      expect(room.matchState.matchScores).toEqual([3, 0]);
+      expect(nextGame.roundScores).toEqual([66, 32]);
+      expect(room.matchState.matchScores).toEqual([2, 0]);
     } finally {
       deleteRoom(room.code);
     }
