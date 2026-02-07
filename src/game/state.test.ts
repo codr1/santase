@@ -1597,12 +1597,90 @@ describe("playTrick", () => {
       { suit: "spades", rank: "9" },
     ]);
     expect(nextState.game.wonTricks[1]).toEqual([{ suit: "diamonds", rank: "Q" }]);
-    expect(nextState.game.roundScores).toEqual([20, 5]);
+    expect(nextState.game.roundScores).toEqual([30, 5]);
     expect(nextState.game.canDeclareWindow).toBe(0);
     expect(nextState.game.lastCompletedTrick).toEqual({
       leaderIndex: 1,
       leaderCard: { suit: "hearts", rank: "10" },
       followerCard: { suit: "spades", rank: "9" },
+    });
+  });
+
+  describe("last trick bonus", () => {
+    test("adds 10 points to the winner on the final exhaustion trick", () => {
+      const state = makeTrickState({
+        leaderHand: [{ suit: "hearts", rank: "A" }],
+        followerHand: [{ suit: "hearts", rank: "9" }],
+      });
+
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "9" },
+      );
+
+      expect(nextState.game.roundScores).toEqual([21, 0]);
+    });
+
+    test("does not add the bonus when the deck is closed", () => {
+      const state: GameState = {
+        ...makeTrickState({
+          leaderHand: [{ suit: "clubs", rank: "J" }],
+          followerHand: [{ suit: "clubs", rank: "Q" }],
+          isClosed: true,
+        }),
+        closedBy: 0,
+      };
+
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "clubs", rank: "J" },
+        { suit: "clubs", rank: "Q" },
+      );
+
+      expect(nextState.game.roundScores).toEqual([0, 5]);
+    });
+
+    test("adds the bonus on top of card points in a final-trick win", () => {
+      const state: GameState = {
+        ...makeTrickState({
+          leaderHand: [{ suit: "hearts", rank: "A" }],
+          followerHand: [{ suit: "hearts", rank: "10" }],
+        }),
+        roundScores: [49, 50],
+      };
+
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "10" },
+      );
+
+      expect(nextState.game.roundScores).toEqual([80, 50]);
+    });
+
+    test("uses bonus-adjusted scores to determine winner and game points on a 60-60 card tie", () => {
+      const state: GameState = {
+        ...makeTrickState({
+          leaderHand: [{ suit: "hearts", rank: "A" }],
+          followerHand: [{ suit: "hearts", rank: "10" }],
+        }),
+        roundScores: [39, 60],
+      };
+
+      const nextState = playTrick(
+        state,
+        0,
+        { suit: "hearts", rank: "A" },
+        { suit: "hearts", rank: "10" },
+      );
+
+      expect(nextState.game.roundScores).toEqual([70, 60]);
+      expect(nextState.winnerIndex).toBe(0);
+      expect(calculateGamePoints(nextState.game.roundScores[1])).toBe(1);
     });
   });
 

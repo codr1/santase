@@ -616,6 +616,7 @@ export function renderGamePage({
       const waitingOffsetPx = 11;
       const trickResolutionDelayMs = 1000;
       const matchOverOverlayDelayMs = 1000;
+      const matchCompleteRedirectDelayMs = 3000;
       const trickResolutionDuration = 0.6;
       const roundEndCountdownStart = 10;
       let animationsSettled = true;
@@ -1130,6 +1131,9 @@ export function renderGamePage({
         roundEndModal.removeAttribute("hidden");
         if (isMatchOver(state)) {
           showMatchOverOverlayAfterDelay(state, viewerIndex);
+          window.setTimeout(() => {
+            redirectToResults();
+          }, matchCompleteRedirectDelayMs);
         } else {
           if (opponentConnected) {
             startRoundEndCountdown();
@@ -2461,16 +2465,6 @@ export function renderGamePage({
         if (roundEndModal) {
           const hasRoundResult = Boolean(parsedState.game.roundResult);
           const isHidden = roundEndModal.hasAttribute("hidden");
-          if (hasRoundResult && isMatchOver(parsedState)) {
-            if (isHidden) {
-              showRoundEndModal(parsedState);
-            } else {
-              updateRoundEndModal(parsedState);
-              applyMatchCompleteState(parsedState);
-              showMatchOverOverlayAfterDelay(parsedState, viewerIndex);
-            }
-            return;
-          }
           if (hasRoundResult) {
             if (isHidden) {
               showRoundEndModal(parsedState);

@@ -19,6 +19,7 @@ const SCHNEIDER_THRESHOLD = 33;
 const VALAT_GAME_POINTS = 3;
 const SCHNEIDER_GAME_POINTS = 2;
 const STANDARD_GAME_POINTS = 1;
+const LAST_TRICK_BONUS = 10;
 
 export type RoundResult = {
   winner: 0 | 1;
@@ -556,6 +557,29 @@ export function playTrick(
   };
 
   const game = drawFromStock(resolvedState, winnerIndex);
+  const isFinalExhaustionTrick =
+    game.playerHands[0].length === 0 &&
+    game.playerHands[1].length === 0 &&
+    game.stock.length === 0;
+  const isClosedDeckRound = state.isClosed && state.closedBy !== null;
+
+  if (isFinalExhaustionTrick && !isClosedDeckRound) {
+    const nextRoundScores: [number, number] = [
+      game.roundScores[0],
+      game.roundScores[1],
+    ];
+    nextRoundScores[winnerIndex] += LAST_TRICK_BONUS;
+
+    return {
+      game: {
+        ...game,
+        roundScores: nextRoundScores,
+      },
+      winnerIndex,
+      trickPoints,
+    };
+  }
+
   return {
     game,
     winnerIndex,
